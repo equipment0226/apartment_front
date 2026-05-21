@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import nubjukImg from "./nubjuk.png";
 
-const API_BASE = "http://apartmentprediction.railway.internal";
+const API_BASE = "https://apartmentprediction-production.up.railway.app";
 
 // ---------------------------------------------------------------------------
 // 포맷 헬퍼
