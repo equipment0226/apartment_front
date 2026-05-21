@@ -2427,3 +2427,47 @@ th {
   }
 }
 
+
+/* ==========================================================================
+   우측 하단 마스코트 (KAIST 넙죽이 + 오리)
+   ========================================================================== */
+.mascot-corner {
+  position: fixed;
+  right: 18px;
+  bottom: 14px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  z-index: 50;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 14px rgba(13, 27, 62, 0.18));
+  opacity: 0.95;
+}
+.mascot-corner .mascot {
+  width: 92px;
+  height: auto;
+  transition: transform 0.4s ease;
+}
+.mascot-corner .mascot-neopjuk {
+  width: 96px;
+  transform: rotate(-6deg) translateY(4px);
+  animation: mascot-bob-left 4.2s ease-in-out infinite;
+}
+.mascot-corner .mascot-duck {
+  width: 88px;
+  transform: rotate(5deg);
+  animation: mascot-bob-right 4.6s ease-in-out infinite;
+}
+@keyframes mascot-bob-left {
+  0%, 100% { transform: rotate(-6deg) translateY(4px); }
+  50%      { transform: rotate(-6deg) translateY(-3px); }
+}
+@keyframes mascot-bob-right {
+  0%, 100% { transform: rotate(5deg) translateY(0); }
+  50%      { transform: rotate(5deg) translateY(-5px); }
+}
+@media (max-width: 720px) {
+  .mascot-corner { right: 8px; bottom: 8px; gap: 2px; }
+  .mascot-corner .mascot-neopjuk { width: 64px; }
+  .mascot-corner .mascot-duck    { width: 58px; }
+}

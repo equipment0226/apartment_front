@@ -3,6 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   ComposedChart, Area, Legend,
 } from "recharts";
+import nubjukImg from "./nubjuk.png";
 
 const API_BASE = "http://apartmentprediction.railway.internal";
 
@@ -2450,6 +2451,19 @@ export default function App() {
         {activeTab === "user" && <UserAnalysisTab />}
         {activeTab === "cluster" && <ClusterAnalysisTab />}
       </div>
+
+      <MascotCorner />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 우측 하단 마스코트 (카이스트 넙죽이 + 오리)
+// ---------------------------------------------------------------------------
+function MascotCorner() {
+  return (
+    <div className="mascot-corner" aria-hidden="true" title="KAIST 넙죽이">
+      <img src={nubjukImg} alt="KAIST 넙죽이" className="mascot mascot-neopjuk" />
     </div>
   );
 }
