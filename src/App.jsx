@@ -1691,7 +1691,7 @@ function ClusterAnalysisTab() {
 
       {/* ─── Section 2: Cluster Overview Cards ────────────────────────── */}
       {result && (
-        <section className="cluster-overview-section">
+        <section className="cluster-overview-section card-box">
           <h2 className="section-title">
             군집 개요
             <span className="section-meta">
@@ -1813,7 +1813,7 @@ function ClusterAnalysisTab() {
       )}
 
       {!result && !loading && (
-        <div className="cluster-placeholder">
+        <div className="cluster-placeholder card-box">
           <p>시뮬레이션 실행 버튼을 눌러 군집 분석을 시작하세요.</p>
           <p className="placeholder-note">
             Phase Table(경착륙·과열·전세불안·스태그플레이션·연착륙)을 기반으로<br />

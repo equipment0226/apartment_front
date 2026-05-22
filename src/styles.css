@@ -8,6 +8,8 @@
   --accent: #2255cc;
   --accent-strong: #1a3ea8;
   --accent-soft: #dce8fb;
+  --surface2: #f3f6fc;
+  --border: rgba(22, 62, 168, 0.16);
   --teal: #1a6ebf;
   --teal-soft: #ddeef9;
   --ok: #1d8e63;
@@ -1484,12 +1486,37 @@ th {
 .cluster-tab {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
+}
+
+/* 공통 흰 박스 — User 분석의 .sim-panel과 동일한 외형 */
+.card-box {
+  border: 1px solid rgba(22, 62, 168, 0.14);
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 2px 24px rgba(13, 27, 62, 0.07), 0 1px 4px rgba(22, 62, 168, 0.06);
+  padding: 24px 28px;
+}
+
+.card-box > h2:first-child,
+.card-box > .section-title:first-child {
+  margin-top: 0;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* Control Panel */
 .cluster-control-panel {
-  padding: 20px 24px;
+  /* card-box가 padding 처리 */
 }
 
 .cluster-controls-row {
@@ -1599,8 +1626,8 @@ th {
   font-weight: 600;
   padding: 2px 7px;
   border-radius: 5px;
-  background: rgba(255,255,255,0.07);
-  color: var(--muted);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 /* Phase-specific tag colours */
@@ -1682,7 +1709,7 @@ th {
 
 /* Deep-Dive */
 .cluster-deepdive {
-  padding: 20px 24px;
+  /* card-box가 padding 처리 */
 }
 
 .deepdive-grid {
@@ -1713,53 +1740,54 @@ th {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255,255,255,0.05);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
   border-radius: 6px;
   padding: 5px 12px;
   margin-bottom: 6px;
   font-size: 12px;
 }
-.selected-sid-label { color: #c8cedf; }
+.selected-sid-label { color: var(--ink); }
 .deselect-btn {
-  background: none;
-  border: 1px solid rgba(255,255,255,0.15);
-  color: #9ba3b8;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--muted);
   border-radius: 4px;
   padding: 2px 8px;
   cursor: pointer;
   font-size: 11px;
 }
-.deselect-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.deselect-btn:hover { background: var(--accent-soft); color: var(--accent-strong); }
 
 /* ── XAI 리포트 ── */
 .xai-report {
-  margin-top: 24px;
+  margin-top: 0;
 }
 .xai-loading { color: var(--muted); font-size: 13px; padding: 12px 0; }
-.xai-hint { font-size: 12px; color: #6b7080; margin: 0 0 14px; }
+.xai-hint { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
 
 .xai-tabs {
   display: flex;
   gap: 8px;
   margin-bottom: 18px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid var(--line);
   padding-bottom: 10px;
 }
 .xai-tab-btn {
-  background: none;
-  border: 1px solid rgba(255,255,255,0.1);
-  color: #9ba3b8;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--muted);
   border-radius: 6px;
   padding: 5px 14px;
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.xai-tab-btn:hover { background: rgba(255,255,255,0.07); color: #c8cedf; }
+.xai-tab-btn:hover { background: var(--accent-soft); color: var(--accent-strong); }
 .xai-tab-btn.active {
-  background: rgba(255,255,255,0.12);
+  background: var(--accent);
   color: #fff;
-  border-color: rgba(255,255,255,0.25);
+  border-color: var(--accent);
 }
 
 /* VSN 바 */
@@ -1771,12 +1799,12 @@ th {
   gap: 8px;
   font-size: 12px;
 }
-.vsn-rank { color: #6b7080; font-size: 11px; }
-.vsn-feat-label { color: #c8cedf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vsn-bar-track { background: rgba(255,255,255,0.06); border-radius: 4px; height: 8px; overflow: hidden; }
+.vsn-rank { color: var(--muted); font-size: 11px; }
+.vsn-feat-label { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vsn-bar-track { background: var(--panel-strong); border-radius: 4px; height: 8px; overflow: hidden; }
 .vsn-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
-.vsn-weight-val { color: #fff; font-weight: 600; text-align: right; font-size: 11px; }
-.vsn-weight-detail { color: #6b7080; font-size: 10px; }
+.vsn-weight-val { color: var(--ink); font-weight: 600; text-align: right; font-size: 11px; }
+.vsn-weight-detail { color: var(--muted); font-size: 10px; }
 
 /* 인디케이터 테이블 */
 .ind-table-wrap { overflow-x: auto; }
@@ -1786,19 +1814,19 @@ th {
   font-size: 12px;
 }
 .ind-table th {
-  background: rgba(255,255,255,0.06);
+  background: var(--panel-strong);
   padding: 6px 10px;
   text-align: left;
-  color: #9ba3b8;
+  color: var(--accent-strong);
   white-space: nowrap;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid var(--line);
 }
 .ind-table td {
   padding: 5px 10px;
-  color: #c8cedf;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
 }
-.ind-ts { color: #6b7080; white-space: nowrap; }
+.ind-ts { color: var(--muted); white-space: nowrap; }
 
 /* 페이즈 타임라인 스트립 */
 .phase-timeline-strip {
@@ -1839,7 +1867,8 @@ th {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  background: rgba(255,255,255,0.03);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px 14px;
 }
@@ -1879,7 +1908,7 @@ th {
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(255,255,255,0.07);
+  background: var(--accent-soft);
 }
 
 /* Phase Distribution Bar */
@@ -1903,7 +1932,8 @@ th {
 }
 
 .phase-dist-track {
-  background: rgba(255,255,255,0.06);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
   border-radius: 4px;
   height: 7px;
   overflow: hidden;
@@ -1943,11 +1973,13 @@ th {
 .cluster-placeholder p {
   margin: 8px 0;
   font-size: 14px;
+  color: var(--ink);
 }
 
 .placeholder-note {
   font-size: 12px !important;
-  opacity: 0.6;
+  color: var(--muted) !important;
+  opacity: 0.85;
   line-height: 1.7;
 }
 
