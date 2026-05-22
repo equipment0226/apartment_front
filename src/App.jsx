@@ -8,17 +8,10 @@ import nubjukImg from "./nubjuk.png";
 const API_BASE = "https://apartmentprediction-production.up.railway.app";
 
 // ---------------------------------------------------------------------------
-// Deepseek 설정 (일반인용 6-섹션 스토리텔링 리포트 생성)
-// ⚠ 보안: 프론트엔드 번들에 LLM 키를 절대 포함하지 마세요.
-//   Vite 의 VITE_* 환경변수도 빌드 시 그대로 번들에 인라인되어 노출됩니다.
-//   반드시 백엔드 프록시(예: /api/llm)를 통해 호출하세요.
-//   임시로 로컬 개발에만 import.meta.env.VITE_DEEPSEEK_KEY 를 사용할 수 있지만,
-//   .env 파일은 .gitignore 에 포함되어야 하고 빌드 산출물을 외부에 배포해서는 안 됩니다.
+// LLM 호출은 모두 백엔드 프록시(POST {API_BASE}/llm/chat)를 통해 수행한다.
+// 키는 Railway 환경변수 DEEPSEEK_API_KEY 에만 보관되며 프론트 번들에 포함되지 않는다.
 // ---------------------------------------------------------------------------
-const DEEPSEEK_API_KEY =
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_DEEPSEEK_KEY) || "";
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
-const DEEPSEEK_MODEL = "deepseek-chat";
+const LLM_PROXY_URL = `${API_BASE}/llm/chat`;
 
 // ---------------------------------------------------------------------------
 // 포맷 헬퍼
@@ -801,26 +794,18 @@ function formatEok(manwon, digits = 1) {
   return `${eok.toFixed(digits)}억`;
 }
 
-// Deepseek 호출
+// LLM 호출 (백엔드 프록시 경유, 키는 서버 환경변수에서 주입)
 async function callDeepseek(messages, { responseFormat = null, temperature = 0.6 } = {}) {
-  const body = {
-    model: DEEPSEEK_MODEL,
-    messages,
-    temperature,
-    stream: false,
-  };
+  const body = { messages, temperature, stream: false };
   if (responseFormat) body.response_format = responseFormat;
-  const res = await fetch(DEEPSEEK_URL, {
+  const res = await fetch(LLM_PROXY_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    throw new Error(`Deepseek ${res.status}: ${txt.slice(0, 200)}`);
+    throw new Error(`LLM proxy ${res.status}: ${txt.slice(0, 200)}`);
   }
   const data = await res.json();
   return data?.choices?.[0]?.message?.content || "";
