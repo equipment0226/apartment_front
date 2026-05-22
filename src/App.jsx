@@ -8,6 +8,17 @@ import nubjukImg from "./nubjuk.png";
 const API_BASE = "https://apartmentprediction-production.up.railway.app";
 
 // ---------------------------------------------------------------------------
+// Deepseek 설정 (일반인용 6-섹션 스토리텔링 리포트 생성)
+// ⚠ 보안 주의: 클라이언트 코드에 API 키가 노출되면 공개됩니다.
+//   프로덕션에서는 백엔드 프록시 또는 환경변수(VITE_DEEPSEEK_KEY)를 권장합니다.
+// ---------------------------------------------------------------------------
+const DEEPSEEK_API_KEY =
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_DEEPSEEK_KEY) ||
+  "REDACTED_DEEPSEEK_KEY";
+const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+const DEEPSEEK_MODEL = "deepseek-chat";
+
+// ---------------------------------------------------------------------------
 // 포맷 헬퍼
 // ---------------------------------------------------------------------------
 function formatNumber(v) {
@@ -349,18 +360,14 @@ function UserAnalysisTab() {
         />
 
         <div className="sim-indicator-head" style={{ marginTop: 20 }}>
-          <h3>자연어 분석 조건</h3>
-          <small>예시: "2026년 9월에 금리가 5% 인상되면?"</small>
+          <h3>상세 분석 조건</h3>
+          <small>챗봇에게 원하는 검색 조건을 입력해주세요.</small>
         </div>
-        <label className="sim-field">
-          <textarea
-            className="query-textarea"
-            rows={3}
-            placeholder={"예) 2026년 9월에 금리가 5% 인상되면 어떻게 될까?\n예) 경기 침체로 집값이 하락할 것 같은데 어떤 시나리오?\n예) 금리 인하 0.5% 후 부동산 회복세를 예측해줘"}
-            value={queryText}
-            onChange={(e) => setQueryText(e.target.value)}
-          />
-        </label>
+        <QueryChatbot
+          finalizedQuery={queryText}
+          onFinalize={(q) => setQueryText(q)}
+          onReset={() => setQueryText("")}
+        />
 
         <label className="sim-field" style={{ marginTop: 12 }}>
           <span>예측 기간: <strong>{targetMonths}개월</strong></span>
@@ -370,7 +377,7 @@ function UserAnalysisTab() {
           />
         </label>
 
-        <button className="sim-run-btn" onClick={handleSearch} disabled={running}>
+        <button className="sim-run-btn" onClick={handleSearch} disabled={running || !queryText.trim()}>
           {running ? "최유사 Diffusion-TFT 시나리오 탐색 중..." : "유사 시나리오 검색 및 분석"}
         </button>
         {error ? <p className="sim-error">{error}</p> : null}
@@ -378,9 +385,9 @@ function UserAnalysisTab() {
 
       {/* 결과 패널 */}
       <div className="sim-panel sim-result">
-        <h2>분석 결과 (TFT P10/P50/P90 기반)</h2>
+        <h2>분석 결과 리포트</h2>
         {!result ? (
-          <p className="sim-placeholder">자연어 조건을 입력하고 검색하면 결과가 표시됩니다.</p>
+          <p className="sim-placeholder">아파트 선정 후 세부 검색 조건을 입력하면 결과가 표시됩니다.</p>
         ) : (
           <>
             {result.region_warning && (
@@ -406,44 +413,12 @@ function UserAnalysisTab() {
               </div>
             )}
 
-            {result.changed_indicators && Object.keys(result.changed_indicators).length > 0 && (
-              <section className="sim-explain parsed-indicators">
-                <h3>인식된 지표 조정</h3>
-                <div className="sim-chips">
-                  {Object.entries(result.changed_indicators).map(([name, val]) => (
-                    <span key={name} className="sim-chip">{indicatorLabel(name)}: {formatNumber(val)}</span>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <QuantileResultCard
-              probabilities={result.probabilities}
-              risk={result.risk}
-              returnP10={result.return_pct_p10}
-              returnP50={result.return_pct_p50}
-              returnP90={result.return_pct_p90}
-              basePriceManwon={result.base_price_manwon}
-              estimatedPriceManwon={result.estimated_price_manwon}
-              scenarioId={result.best_scenario_id}
+            {/* 🆕 6-섹션 일반인용 스토리텔링 리포트 (Deepseek) */}
+            <StorytellingReport
+              result={result}
+              apt={{ gu: aptGu, dong: aptDong, complex_name: aptComplex, building: aptBuilding, floor: aptFloor }}
+              targetMonths={targetMonths}
             />
-
-            <section className="sim-explain" style={{ marginTop: 16 }}>
-              <h3>시나리오 가격 추이</h3>
-              <TrendChart
-                historyPoints={result.history_points}
-                forecastPoints={result.forecast_points}
-                label="Diffusion-TFT"
-              />
-            </section>
-
-            {result.best_scenario_id && (
-              <XAIReport
-                scenarioId={result.best_scenario_id}
-                runId={result.run_id}
-                palette="#4361ee"
-              />
-            )}
           </>
         )}
       </div>
@@ -810,6 +785,775 @@ function XAIReport({ scenarioId, runId, palette }) {
         </>
       )}
     </section>
+  );
+}
+
+// ===========================================================================
+// 🆕 일반인용 6-섹션 스토리텔링 리포트 (Deepseek LLM 기반)
+// ===========================================================================
+
+// 만원 → "OO.O억" 변환
+function formatEok(manwon, digits = 1) {
+  if (manwon == null || Number.isNaN(Number(manwon))) return "-";
+  const eok = Number(manwon) / 10000;
+  return `${eok.toFixed(digits)}억`;
+}
+
+// Deepseek 호출
+async function callDeepseek(messages, { responseFormat = null, temperature = 0.6 } = {}) {
+  const body = {
+    model: DEEPSEEK_MODEL,
+    messages,
+    temperature,
+    stream: false,
+  };
+  if (responseFormat) body.response_format = responseFormat;
+  const res = await fetch(DEEPSEEK_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Deepseek ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content || "";
+}
+
+function tryParseJSON(text) {
+  if (!text) return null;
+  let s = String(text).trim();
+  // strip ```json ... ``` fences
+  const m = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (m) s = m[1].trim();
+  try { return JSON.parse(s); } catch { /* fallthrough */ }
+  // try to grab outermost {...}
+  const i = s.indexOf("{");
+  const j = s.lastIndexOf("}");
+  if (i >= 0 && j > i) {
+    try { return JSON.parse(s.slice(i, j + 1)); } catch { return null; }
+  }
+  return null;
+}
+
+// 5년(60개월) 마일스톤 추출
+function extractMilestones(forecast, basePriceManwon) {
+  if (!forecast?.length) return [];
+  const pts = forecast.slice(0, 60);
+  const prices = pts.map((p) => Number(p.price));
+  const peakIdx = prices.indexOf(Math.max(...prices));
+  // 정점 이후 저점
+  let troughIdx = -1;
+  if (peakIdx < pts.length - 1) {
+    const tail = prices.slice(peakIdx + 1);
+    const minVal = Math.min(...tail);
+    troughIdx = peakIdx + 1 + tail.indexOf(minVal);
+  }
+  // 회복기: 0~peak 사이에서 base 대비 첫 +2% 돌파 지점
+  let recoveryIdx = -1;
+  const base = basePriceManwon || prices[0];
+  for (let k = 0; k <= peakIdx; k++) {
+    if (prices[k] >= base * 1.02) { recoveryIdx = k; break; }
+  }
+  const last = pts.length - 1;
+  const out = [];
+  out.push({ idx: 0, label: "현재", price: prices[0] });
+  if (recoveryIdx > 0 && recoveryIdx !== peakIdx) out.push({ idx: recoveryIdx, label: "회복기", price: prices[recoveryIdx] });
+  if (peakIdx > 0 && peakIdx !== last) out.push({ idx: peakIdx, label: "단기 정점", price: prices[peakIdx] });
+  if (troughIdx > 0 && troughIdx !== last) out.push({ idx: troughIdx, label: "조정 저점", price: prices[troughIdx] });
+  out.push({ idx: last, label: `${Math.round((last + 1) / 12 * 10) / 10}년 후`, price: prices[last] });
+  return out;
+}
+
+// Fan chart 데이터 생성 (P05~P95 / P25~P75 친숙한 라벨)
+function buildFanChartData(forecast, p10Ret, p90Ret) {
+  if (!forecast?.length) return [];
+  const pts = forecast.slice(0, 60);
+  const lo = (p10Ret ?? -10) / 100;  // 비관 수익률
+  const hi = (p90Ret ?? 10) / 100;   // 낙관 수익률
+  const N = pts.length;
+  return pts.map((p, i) => {
+    const progress = (i + 1) / N;
+    // 시간이 지날수록 불확실성 증가 (sqrt 스케일)
+    const widen = Math.sqrt(progress);
+    const med = Number(p.price);
+    const outerHi = med * (1 + hi * widen);
+    const outerLo = med * (1 + lo * widen);
+    const innerHi = med * (1 + hi * widen * 0.5);
+    const innerLo = med * (1 + lo * widen * 0.5);
+    return {
+      t: normalizeTsLabel(p.timestamp || `+${i + 1}m`),
+      median_eok: med / 10000,
+      outer_eok: [outerLo / 10000, outerHi / 10000],
+      inner_eok: [innerLo / 10000, innerHi / 10000],
+    };
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 차트 1: 5년 Fan chart (친숙한 라벨)
+// ────────────────────────────────────────────────────────────────────────
+function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p90Ret }) {
+  const data = useMemo(
+    () => buildFanChartData(forecast, p10Ret, p90Ret),
+    [forecast, p10Ret, p90Ret]
+  );
+  const milestones = useMemo(
+    () => extractMilestones(forecast, basePriceManwon),
+    [forecast, basePriceManwon]
+  );
+  if (!data.length) return <p className="sim-placeholder">예측 데이터가 없습니다.</p>;
+
+  const milestoneByTs = new Map(milestones.map((m) => [data[m.idx]?.t, m]));
+
+  return (
+    <div className="story-fan-wrap">
+      <ResponsiveContainer width="100%" height={300}>
+        <ComposedChart data={data} margin={{ top: 16, right: 24, bottom: 8, left: 8 }}>
+          <CartesianGrid stroke="#2a2e3d" strokeDasharray="3 3" />
+          <XAxis dataKey="t" tick={{ fontSize: 10, fill: "#9ba3b8" }} interval="preserveStartEnd" />
+          <YAxis
+            tick={{ fontSize: 10, fill: "#9ba3b8" }} width={56}
+            tickFormatter={(v) => `${v.toFixed(0)}억`}
+            domain={["dataMin - 1", "dataMax + 1"]}
+          />
+          <Tooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0]?.payload;
+              if (!row) return null;
+              return (
+                <div className="story-tooltip">
+                  <p className="story-tt-ts">{label}</p>
+                  <p>예상: <strong>{row.median_eok.toFixed(2)}억</strong></p>
+                  <p className="story-tt-range">
+                    가능성 높은 범위: {row.inner_eok[0].toFixed(2)} ~ {row.inner_eok[1].toFixed(2)}억
+                  </p>
+                  <p className="story-tt-range">
+                    전체 범위: {row.outer_eok[0].toFixed(2)} ~ {row.outer_eok[1].toFixed(2)}억
+                  </p>
+                </div>
+              );
+            }}
+          />
+          <Legend
+            wrapperStyle={{ fontSize: 11 }}
+            payload={[
+              { value: "예상 가격 (중앙값)", type: "line", color: "#4361ee" },
+              { value: "가능성 높은 범위", type: "rect", color: "#4361ee99" },
+              { value: "전체 범위", type: "rect", color: "#4361ee33" },
+            ]}
+          />
+          <Area type="monotone" dataKey="outer_eok" stroke="none" fill="#4361ee" fillOpacity={0.12} />
+          <Area type="monotone" dataKey="inner_eok" stroke="none" fill="#4361ee" fillOpacity={0.28} />
+          <Line
+            type="monotone" dataKey="median_eok" stroke="#4361ee" strokeWidth={2.5} dot={false}
+            isAnimationActive={false}
+          />
+          {/* 마일스톤 라벨 점 */}
+          <Line
+            type="monotone" dataKey="median_eok" stroke="transparent" isAnimationActive={false}
+            dot={(props) => {
+              const m = milestoneByTs.get(props.payload?.t);
+              if (!m) return null;
+              return (
+                <g key={`ms-${props.index}`}>
+                  <circle cx={props.cx} cy={props.cy} r={5} fill="#f77f00" stroke="#fff" strokeWidth={1.5} />
+                  <text
+                    x={props.cx} y={props.cy - 12}
+                    textAnchor="middle" fontSize={11} fill="#f1c40f" fontWeight="600"
+                  >
+                    {m.label} · {(m.price / 10000).toFixed(1)}억
+                  </text>
+                </g>
+              );
+            }}
+            legendType="none"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 차트 2: 가격 영향 요인 막대 (정책/금리/수급 3개 카테고리)
+// ────────────────────────────────────────────────────────────────────────
+const FACTOR_CATEGORY_META = {
+  정책: { color: "#9b59b6", icon: "📜" },
+  금리: { color: "#e67e22", icon: "💰" },
+  수급: { color: "#27ae60", icon: "🏘" },
+};
+function FactorImpactBars({ factors }) {
+  if (!factors?.length) return null;
+  const grouped = {};
+  factors.forEach((f) => {
+    const cat = f.category || "기타";
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(f);
+  });
+  return (
+    <div className="story-factors">
+      {Object.entries(grouped).map(([cat, items]) => {
+        const meta = FACTOR_CATEGORY_META[cat] || { color: "#7f8c8d", icon: "🔹" };
+        return (
+          <div key={cat} className="story-factor-group">
+            <h4 style={{ color: meta.color }}>
+              <span>{meta.icon}</span> {cat}
+            </h4>
+            {items.map((f, i) => {
+              const isUp = (f.impact || "").includes("↑");
+              const color = isUp ? "#27ae60" : "#e74c3c";
+              const strength = (f.impact || "").length; // ↑↑ → 2, ↑ → 1
+              return (
+                <div key={`${cat}-${i}`} className="story-factor-row">
+                  <span className="story-factor-name">{f.name}</span>
+                  <span className="story-factor-arrow" style={{ color }}>
+                    {f.impact || "•"}
+                  </span>
+                  <div className="story-factor-bar">
+                    <div
+                      className="story-factor-fill"
+                      style={{
+                        width: `${Math.min(strength * 35, 100)}%`,
+                        background: color,
+                      }}
+                    />
+                  </div>
+                  <span className="story-factor-cause">{f.explanation}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 차트 3: 상승 vs 하락 환경 비교 (금리·수급·규제 3축)
+// ────────────────────────────────────────────────────────────────────────
+function ScenarioCompareTable({ bull, bear }) {
+  if (!bull || !bear) return null;
+  const axes = [
+    { key: "rate", label: "금리" },
+    { key: "supply", label: "수급" },
+    { key: "policy", label: "규제" },
+  ];
+  return (
+    <div className="story-scenario-compare">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th className="story-bull">▲ 상승 시나리오</th>
+            <th className="story-bear">▼ 하락 시나리오</th>
+          </tr>
+        </thead>
+        <tbody>
+          {axes.map((ax) => (
+            <tr key={ax.key}>
+              <th>{ax.label}</th>
+              <td className="story-bull-cell">{bull[ax.key] || "-"}</td>
+              <td className="story-bear-cell">{bear[ax.key] || "-"}</td>
+            </tr>
+          ))}
+          <tr className="story-target-row">
+            <th>예상 가격</th>
+            <td className="story-bull-cell">
+              <strong>{bull.expected_price_eok ? `${bull.expected_price_eok}억` : "-"}</strong>
+            </td>
+            <td className="story-bear-cell">
+              <strong>{bear.expected_price_eok ? `${bear.expected_price_eok}억` : "-"}</strong>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {(bull.narrative || bear.narrative) && (
+        <div className="story-scenario-narratives">
+          {bull.narrative && (
+            <div className="story-narr story-narr-bull">
+              <h5>▲ 만약 이런 일이 벌어진다면</h5>
+              <p>{bull.narrative}</p>
+            </div>
+          )}
+          {bear.narrative && (
+            <div className="story-narr story-narr-bear">
+              <h5>▼ 만약 이런 일이 벌어진다면</h5>
+              <p>{bear.narrative}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 페르소나별 액션 아이템 (보유자 / 매수 / 매도)
+// ────────────────────────────────────────────────────────────────────────
+const PERSONAS = [
+  { key: "holder", label: "🏠 이미 보유 중이신 분", desc: "단기 모니터링 포인트" },
+  { key: "buyer", label: "🛒 매수를 검토 중이신 분", desc: "확인하면 좋을 신호" },
+  { key: "seller", label: "💼 매도를 검토 중이신 분", desc: "타이밍 점검 포인트" },
+];
+function PersonaActions({ actions }) {
+  if (!actions) return null;
+  return (
+    <div className="story-personas">
+      {PERSONAS.map((p) => {
+        const items = actions[p.key] || [];
+        return (
+          <div key={p.key} className="story-persona-card">
+            <h4>{p.label}</h4>
+            <p className="story-persona-desc">{p.desc}</p>
+            <ol>
+              {items.length > 0
+                ? items.map((it, i) => <li key={i}>{it}</li>)
+                : <li className="story-empty">제시된 항목 없음</li>}
+            </ol>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 6-섹션 스토리텔링 리포트 오케스트레이터
+// ────────────────────────────────────────────────────────────────────────
+function buildStoryPrompt(result, aptInfo, targetMonths) {
+  const base = result.base_price_manwon;
+  const est = result.estimated_price_manwon;
+  const eokBase = base ? (base / 10000).toFixed(2) : "?";
+  const eokEst = est ? (est / 10000).toFixed(2) : "?";
+  const changed = result.changed_indicators || {};
+  const changedLines = Object.entries(changed)
+    .map(([k, v]) => `  - ${indicatorLabel(k)}: ${v}`)
+    .join("\n") || "  (사용자 지정 변경 없음)";
+  const probs = result.probabilities || {};
+  const risk = result.risk || {};
+  const aptLabel = [aptInfo.gu, aptInfo.dong, aptInfo.complex_name]
+    .filter(Boolean).join(" ") || "(미선택)";
+  const years = (targetMonths / 12).toFixed(1);
+
+  const system = `당신은 부동산 데이터 분석가입니다. 일반 시민이 어려운 통계 용어 없이 \
+"위에서부터 읽으며 자연스럽게 의사결정에 도달"하도록 친근한 설명체("~합니다")로 작성합니다.
+
+작성 규칙:
+- 모든 가격은 "OO.O억"으로 통일 (만원/㎡ 단위 금지).
+- 단정형 금지. "~할 가능성이 큽니다", "~할 수도 있습니다" 형태로 작성.
+- "위기", "폭락" 등 자극어 회피. 부정 정보는 차분하게 전달.
+- 한 문장 80자 이내, 한 단락 4문장 이내.
+- 변수명은 친숙하게 풀어 사용 (예: "LTV 레짐" → "주택담보대출 한도 규제").
+
+반드시 아래 스키마의 순수 JSON 객체만 반환하세요 (코드펜스 금지, 설명 금지):
+{
+  "summary": "3~5문장. 현재(${eokBase}억) → 단기 변동 → ${years}년 후 예상가(${eokEst}억). '단, ~할 경우 ~까지 갈 수도 있다' 톤 포함.",
+  "factors": [
+    {"category": "정책|금리|수급", "name": "친숙한 변수명", "impact": "↑↑|↑|↓|↓↓", "explanation": "한 줄 인과"}
+  ],
+  "bull": {
+    "rate": "금리 환경 한 줄",
+    "supply": "수급 환경 한 줄",
+    "policy": "규제 환경 한 줄",
+    "expected_price_eok": "숫자(억)",
+    "narrative": "만약 ~한다면 ~억까지 오를 수 있습니다. 2~3문장."
+  },
+  "bear": {
+    "rate": "...", "supply": "...", "policy": "...",
+    "expected_price_eok": "숫자(억)",
+    "narrative": "..."
+  },
+  "actions": {
+    "holder": ["3개 모니터링 포인트"],
+    "buyer": ["3개 확인 포인트"],
+    "seller": ["3개 점검 포인트"]
+  },
+  "longterm": {
+    "narrative": "20년 흐름. '참고용'임을 명시. 2~3문장.",
+    "risks": ["예측이 틀릴 수 있는 대표 케이스 3개"],
+    "disclaimer": "투자 판단의 단독 근거가 될 수 없습니다 등 면책 고지문"
+  }
+}`;
+
+  const user = `[대상 아파트]
+${aptLabel} · 현재 가격: 약 ${eokBase}억
+
+[모델 예측 (Diffusion-TFT)]
+- 예측 기간: ${targetMonths}개월(약 ${years}년)
+- 중앙값 예상가: ${eokEst}억 (현재 대비 ${result.return_pct_p50?.toFixed?.(1) ?? "?"}%)
+- 가능성 높은 범위(상): +${result.return_pct_p90?.toFixed?.(1) ?? "?"}% (낙관)
+- 가능성 높은 범위(하): ${result.return_pct_p10?.toFixed?.(1) ?? "?"}% (비관)
+- 상승/보합/하락 확률: ${formatPct(probs["상승"])} / ${formatPct(probs["보합"])} / ${formatPct(probs["하락"])}
+- 예측 신뢰도: ${risk.risk_grade || "정보 없음"} (밴드폭 ${formatPct(risk.bandwidth_pct)})
+- 방향 의도: ${result.direction_intent || "neutral"}
+
+[사용자가 지정한 변동 조건]
+${changedLines}
+
+[중요 발견 — factors 작성 시 반영]
+- 현 시장에서는 정부 정책(세금/대출 규제)이 가격에 가장 큰 영향을 줍니다. factors의 정책 항목 영향 강도를 가장 크게 표기하세요.
+- factors는 정확히 8개 변수로 구성: 정책 3개(주택담보대출 한도 규제, 부동산 세제, 조정대상지역 지정), 금리 2개(기준금리, 신규 주담대 금리), 수급 3개(아파트 매매 수급, 전세 수급, 매매지수).
+
+위 데이터를 바탕으로 6-섹션 일반인용 리포트의 JSON을 생성하세요.`;
+
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 🆕 QueryChatbot — Deepseek 기반 자연어 조건 수집 챗봇 (최대 3 step)
+// ────────────────────────────────────────────────────────────────────────
+const CHATBOT_MAX_TURNS = 3;
+
+function buildChatbotMessages(history, userTurnCount) {
+  const forceFinalize = userTurnCount >= CHATBOT_MAX_TURNS;
+  const system = `당신은 부동산 시뮬레이션 검색 조건을 모으는 친근한 한국어 챗봇입니다.
+
+목적: 사용자가 알고 싶은 "거시 시나리오"를 한 문장으로 정리해서 검색에 넘기는 것.
+정리에 필요한 핵심 요소 4가지:
+  1) 시점 (예: 2026년 9월, 내년 상반기)
+  2) 거시 변수 (기준금리, 주담대 금리, 집값, 전세, CPI, 실업률, LTV/DSR 규제, 부동산 정책 등)
+  3) 방향 (상승/하락/완화/강화)
+  4) 크기 또는 정도 (예: 0.5%p, 5%, 큰 폭, 소폭)
+
+진행 규칙:
+- 사용자 입력이 모호하거나 4가지 요소 중 빠진 게 있으면, 빠진 부분을 콕 집어 한 가지만 친근하게 되묻습니다.
+  반드시 모범 예시 형태를 함께 보여주세요. 예: "2026년 9월에 기준금리가 0.5%p 인상되면 어떻게 될까요?"
+- 사용자 입력이 부동산/거시경제와 무관하거나 부적절하면, 부드럽게 본 주제로 다시 안내합니다.
+- 사용자 발화 ${CHATBOT_MAX_TURNS}회 이내에 반드시 검색 조건을 확정해야 합니다.
+${forceFinalize ? `- ⚠ 이번 턴은 사용자 ${userTurnCount}번째 발화이므로, 정보가 부족해도 지금까지 모은 단서로 \
+최선의 검색 문장을 만들어 status="complete"로 마무리하세요.` : "- 정보가 충분히 모이면 status=\"complete\"로 마무리하세요."}
+
+반드시 아래 JSON만 반환하세요 (코드펜스/설명 금지):
+{
+  "status": "incomplete" | "complete",
+  "reply": "사용자에게 보여줄 한국어 메시지(친근체, 80자 내외 1~2문장). complete이면 '이 조건으로 검색을 시작하겠습니다' 톤으로.",
+  "synthesized_query": "status=complete일 때만 채움. 시점·변수·방향·크기가 들어간 자연어 한 문장. 예: '2026년 9월에 기준금리가 0.5%p 인상되면 어떻게 될까?'"
+}`;
+
+  const messages = [{ role: "system", content: system }];
+  history.forEach((m) => {
+    if (m.role === "user") messages.push({ role: "user", content: m.text });
+    else if (m.role === "bot") messages.push({ role: "assistant", content: JSON.stringify({ status: m.status || "incomplete", reply: m.text }) });
+  });
+  return messages;
+}
+
+function QueryChatbot({ onFinalize, finalizedQuery, onReset }) {
+  const [messages, setMessages] = useState([
+    {
+      role: "bot",
+      text: "안녕하세요! 어떤 시나리오를 살펴볼지 알려주세요.\n예) \"2026년 9월에 기준금리가 0.5%p 인상되면 어떻게 될까?\"",
+      status: "incomplete",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const [userTurns, setUserTurns] = useState(0);
+  const [finalized, setFinalized] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function handleSend() {
+    const text = input.trim();
+    if (!text || thinking || finalized) return;
+    const newTurns = userTurns + 1;
+    const nextHistory = [...messages, { role: "user", text }];
+    setMessages(nextHistory);
+    setInput("");
+    setUserTurns(newTurns);
+    setThinking(true);
+    setErr("");
+
+    try {
+      const chatMsgs = buildChatbotMessages(nextHistory, newTurns);
+      const raw = await callDeepseek(chatMsgs, {
+        responseFormat: { type: "json_object" },
+        temperature: 0.4,
+      });
+      const parsed = tryParseJSON(raw) || {};
+      let status = parsed.status === "complete" ? "complete" : "incomplete";
+      let reply = parsed.reply || "조금 더 자세히 말씀해 주세요.";
+      let synth = parsed.synthesized_query || "";
+
+      // 3턴 도달 시 강제 마감
+      if (newTurns >= CHATBOT_MAX_TURNS) {
+        status = "complete";
+        if (!synth) {
+          // 최후 폴백: 사용자 발화를 그대로 검색 문장으로
+          synth = nextHistory.filter((m) => m.role === "user").map((m) => m.text).join(" / ");
+        }
+        if (!parsed.reply) reply = "지금까지 알려주신 내용으로 검색을 시작하겠습니다.";
+      }
+
+      setMessages((prev) => [...prev, { role: "bot", text: reply, status, synth }]);
+
+      if (status === "complete" && synth) {
+        setFinalized(true);
+        onFinalize(synth);
+      }
+    } catch (e) {
+      setErr(e.message || "챗봇 응답 오류");
+      setMessages((prev) => [...prev, { role: "bot", text: "⚠ 응답을 가져오지 못했습니다. 다시 시도해 주세요.", status: "incomplete" }]);
+    } finally {
+      setThinking(false);
+    }
+  }
+
+  function handleReset() {
+    setMessages([
+      {
+        role: "bot",
+        text: "새로운 시나리오를 알려주세요. 예) \"2027년 3월에 LTV 규제가 완화되면?\"",
+        status: "incomplete",
+      },
+    ]);
+    setInput("");
+    setUserTurns(0);
+    setFinalized(false);
+    setErr("");
+    if (onReset) onReset();
+  }
+
+  const remaining = Math.max(0, CHATBOT_MAX_TURNS - userTurns);
+
+  return (
+    <div className="chatbot-wrap">
+      <div className="chatbot-header">
+        <span>🤖 시나리오 챗봇</span>
+        <small>
+          {finalized
+            ? "검색 조건 확정 완료"
+            : `남은 질문 횟수 ${remaining}/${CHATBOT_MAX_TURNS}`}
+        </small>
+      </div>
+      <div className="chatbot-messages">
+        {messages.map((m, i) => (
+          <div key={i} className={`chat-msg chat-${m.role}`}>
+            <div className="chat-bubble">
+              {m.text.split("\n").map((line, j) => (
+                <span key={j}>{line}{j < m.text.split("\n").length - 1 && <br />}</span>
+              ))}
+              {m.role === "bot" && m.status === "complete" && m.synth && (
+                <div className="chat-synth">검색 조건: <em>"{m.synth}"</em></div>
+              )}
+            </div>
+          </div>
+        ))}
+        {thinking && (
+          <div className="chat-msg chat-bot">
+            <div className="chat-bubble chat-typing">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        )}
+      </div>
+      {err && <p className="sim-error" style={{ margin: "4px 8px" }}>{err}</p>}
+
+      {finalized ? (
+        <div className="chatbot-finalized">
+          <span>✅ 검색 조건이 확정되었습니다. 우측 결과 패널을 확인하거나 아래 버튼으로 다시 시작하세요.</span>
+          <button type="button" className="chatbot-reset-btn" onClick={handleReset}>
+            🔄 새 시나리오로 다시 시작
+          </button>
+        </div>
+      ) : (
+        <div className="chatbot-input-row">
+          <textarea
+            className="chatbot-input"
+            rows={2}
+            placeholder="예) 2026년 9월에 기준금리가 0.5%p 인상되면?"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            disabled={thinking}
+          />
+          <button
+            type="button"
+            className="chatbot-send-btn"
+            onClick={handleSend}
+            disabled={thinking || !input.trim()}
+          >
+            {thinking ? "..." : "보내기"}
+          </button>
+        </div>
+      )}
+
+      {finalizedQuery && (
+        <p className="chatbot-current-query">
+          📌 현재 검색 조건: <strong>{finalizedQuery}</strong>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function StorytellingReport({ result, apt, targetMonths }) {
+  const [story, setStory] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  // result가 바뀌면 자동 생성
+  useEffect(() => {
+    if (!result) { setStory(null); return; }
+    let cancelled = false;
+    (async () => {
+      setLoading(true); setErr(""); setStory(null);
+      try {
+        const messages = buildStoryPrompt(result, apt, targetMonths);
+        const raw = await callDeepseek(messages, {
+          responseFormat: { type: "json_object" },
+          temperature: 0.6,
+        });
+        const parsed = tryParseJSON(raw);
+        if (!parsed) throw new Error("응답 파싱 실패");
+        if (!cancelled) setStory(parsed);
+      } catch (e) {
+        if (!cancelled) setErr(e.message || "리포트 생성 실패");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
+  if (loading) {
+    return (
+      <div className="story-report story-loading">
+        <div className="story-spinner" />
+        <p>분석 리포트를 작성하고 있습니다…</p>
+        <small>Agent가 6개 섹션의 스토리텔링을 구성 중입니다.</small>
+      </div>
+    );
+  }
+
+  if (err) {
+    return (
+      <div className="story-report story-error">
+        <p>⚠ 스토리텔링 리포트 생성 오류: {err}</p>
+      </div>
+    );
+  }
+
+  if (!story) return null;
+
+  const milestones = extractMilestones(result.forecast_points, result.base_price_manwon);
+
+  return (
+    <div className="story-report">
+      {/* ① 한 줄 요약 */}
+      <section className="story-section story-summary">
+        <h3 className="story-h">① 한 줄 요약</h3>
+        <p className="story-summary-text">{story.summary}</p>
+        <div className="story-summary-pills">
+          <span>현재 <strong>{formatEok(result.base_price_manwon)}</strong></span>
+          <span>→</span>
+          <span>{(targetMonths / 12).toFixed(1)}년 후 <strong>{formatEok(result.estimated_price_manwon)}</strong></span>
+        </div>
+      </section>
+
+      {/* ② 단기 5년 시세 전망 */}
+      <section className="story-section">
+        <h3 className="story-h">② 단기 5년 시세 전망</h3>
+        <p className="story-sub">
+          파란 선은 예상 가격(중앙값)이고, 진한 영역은 가능성 높은 범위, 옅은 영역은 전체 범위입니다.
+        </p>
+        <FiveYearFanChart
+          forecast={result.forecast_points}
+          basePriceManwon={result.base_price_manwon}
+          p10Ret={result.return_pct_p10}
+          p90Ret={result.return_pct_p90}
+        />
+        {milestones.length > 0 && (
+          <table className="story-milestone-table">
+            <thead>
+              <tr>
+                <th>시점</th>
+                <th>예상 가격</th>
+                <th>현재 대비</th>
+              </tr>
+            </thead>
+            <tbody>
+              {milestones.map((m, i) => {
+                const diff = result.base_price_manwon
+                  ? ((m.price - result.base_price_manwon) / result.base_price_manwon) * 100
+                  : null;
+                return (
+                  <tr key={i}>
+                    <td><strong>{m.label}</strong></td>
+                    <td>{(m.price / 10000).toFixed(2)}억</td>
+                    <td className={diff > 0 ? "up-txt" : diff < 0 ? "down-txt" : ""}>
+                      {diff != null ? `${diff >= 0 ? "+" : ""}${diff.toFixed(1)}%` : "-"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* ③ 왜 이렇게 예측됐나 */}
+      <section className="story-section">
+        <h3 className="story-h">③ 왜 이렇게 예측됐나</h3>
+        <p className="story-sub">
+          가격을 움직이는 요인을 <strong>정책 · 금리 · 수급</strong> 3개 카테고리로 정리했습니다.
+          현 시장에서는 정부 정책(세금/대출 규제)의 영향이 가장 큽니다.
+        </p>
+        <FactorImpactBars factors={story.factors} />
+      </section>
+
+      {/* ④ 상승 vs 하락 시나리오 */}
+      <section className="story-section">
+        <h3 className="story-h">④ 상승 vs 하락 시나리오</h3>
+        <p className="story-sub">
+          어떤 환경이 되면 어느 방향으로 갈 가능성이 큰지, 금리·수급·규제 3축으로 비교합니다.
+        </p>
+        <ScenarioCompareTable bull={story.bull} bear={story.bear} />
+      </section>
+
+      {/* ⑤ 내가 알아둘 점 */}
+      <section className="story-section">
+        <h3 className="story-h">⑤ 내가 알아둘 점</h3>
+        <p className="story-sub">
+          상황별 의사결정에 도움이 되는 체크 포인트입니다. (특정 행동을 권유하지 않습니다)
+        </p>
+        <PersonaActions actions={story.actions} />
+      </section>
+
+      {/* ⑥ 장기 전망 + 한계 */}
+      {story.longterm && (
+        <section className="story-section story-longterm">
+          <h3 className="story-h">⑥ 장기 전망 + 이 예측의 한계</h3>
+          <p>{story.longterm.narrative}</p>
+          {story.longterm.risks?.length > 0 && (
+            <>
+              <h5>이 예측이 빗나갈 수 있는 대표 케이스</h5>
+              <ul className="story-risk-list">
+                {story.longterm.risks.map((r, i) => <li key={i}>{r}</li>)}
+              </ul>
+            </>
+          )}
+          <div className="story-disclaimer">
+            ⚠ {story.longterm.disclaimer || "본 리포트는 참고용이며, 투자 판단의 단독 근거가 될 수 없습니다."}
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -2403,7 +3147,7 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
 
   const TABS = [
-    { id: "user", label: "User 분석", sub: "Diffusion-TFT · 자연어 쿼리" },
+    { id: "user", label: "User 분석", sub: "Diffusion-TFT" },
     { id: "cluster", label: "대표 시나리오 분석", sub: "Diffusion-TFT · Phase 군집 분석" },
   ];
 
