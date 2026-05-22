@@ -840,10 +840,11 @@ function tryParseJSON(text) {
   return null;
 }
 
-// 5년(60개월) 마일스톤 추출
-function extractMilestones(forecast, basePriceManwon) {
+// 마일스톤 추출 (예측 종료기간까지 전체 forecast 사용)
+function extractMilestones(forecast, basePriceManwon, maxMonths) {
   if (!forecast?.length) return [];
-  const pts = forecast.slice(0, 60);
+  const limit = Math.max(1, Math.min(forecast.length, Number(maxMonths) || forecast.length));
+  const pts = forecast.slice(0, limit);
   const prices = pts.map((p) => Number(p.price));
   const peakIdx = prices.indexOf(Math.max(...prices));
   // 정점 이후 저점
@@ -869,42 +870,43 @@ function extractMilestones(forecast, basePriceManwon) {
   return out;
 }
 
-// Fan chart 데이터 생성 (P05~P95 / P25~P75 친숙한 라벨)
-function buildFanChartData(forecast, p10Ret, p90Ret) {
+// Fan chart 데이터 생성: 중앙값(p50) 라인 + p10~p90 단일 음영 밴드
+// p10Ret / p90Ret 는 base price 대비 누적 수익률(%)이므로,
+// 음영 밴드는 그 절대값이 아니라 "median 주변 대칭 spread"로 그려야 p50이 항상 중앙에 위치한다.
+function buildFanChartData(forecast, p10Ret, p90Ret, maxMonths) {
   if (!forecast?.length) return [];
-  const pts = forecast.slice(0, 60);
-  const lo = (p10Ret ?? -10) / 100;  // 비관 수익률
-  const hi = (p90Ret ?? 10) / 100;   // 낙관 수익률
+  const limit = Math.max(1, Math.min(forecast.length, Number(maxMonths) || forecast.length));
+  const pts = forecast.slice(0, limit);
+  const loRet = (p10Ret ?? -10) / 100;   // 비관 (p10) 수익률
+  const hiRet = (p90Ret ?? 10) / 100;    // 낙관 (p90) 수익률
+  // p10~p90 폭의 절반 = median 기준 대칭 반폭 (분위 역전 안전)
+  const halfSpread = Math.abs(hiRet - loRet) / 2;
   const N = pts.length;
   return pts.map((p, i) => {
-    const progress = (i + 1) / N;
-    // 시간이 지날수록 불확실성 증가 (sqrt 스케일)
-    const widen = Math.sqrt(progress);
+    // 불확실성은 시간에 비례하여 확장 (sqrt 스케일)
+    const widen = Math.sqrt((i + 1) / N);
     const med = Number(p.price);
-    const outerHi = med * (1 + hi * widen);
-    const outerLo = med * (1 + lo * widen);
-    const innerHi = med * (1 + hi * widen * 0.5);
-    const innerLo = med * (1 + lo * widen * 0.5);
+    const bandHi = med * (1 + halfSpread * widen);
+    const bandLo = med * (1 - halfSpread * widen);
     return {
       t: normalizeTsLabel(p.timestamp || `+${i + 1}m`),
       median_eok: med / 10000,
-      outer_eok: [outerLo / 10000, outerHi / 10000],
-      inner_eok: [innerLo / 10000, innerHi / 10000],
+      band_eok: [bandLo / 10000, bandHi / 10000],
     };
   });
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// 차트 1: 5년 Fan chart (친숙한 라벨)
+// 차트 1: Fan chart (중앙값 라인 + p10~p90 음영)
 // ────────────────────────────────────────────────────────────────────────
-function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p90Ret }) {
+function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p90Ret, targetMonths }) {
   const data = useMemo(
-    () => buildFanChartData(forecast, p10Ret, p90Ret),
-    [forecast, p10Ret, p90Ret]
+    () => buildFanChartData(forecast, p10Ret, p90Ret, targetMonths),
+    [forecast, p10Ret, p90Ret, targetMonths]
   );
   const milestones = useMemo(
-    () => extractMilestones(forecast, basePriceManwon),
-    [forecast, basePriceManwon]
+    () => extractMilestones(forecast, basePriceManwon, targetMonths),
+    [forecast, basePriceManwon, targetMonths]
   );
   if (!data.length) return <p className="sim-placeholder">예측 데이터가 없습니다.</p>;
 
@@ -929,12 +931,9 @@ function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p90Ret }) {
               return (
                 <div className="story-tooltip">
                   <p className="story-tt-ts">{label}</p>
-                  <p>예상: <strong>{row.median_eok.toFixed(2)}억</strong></p>
+                  <p>예상(p50): <strong>{row.median_eok.toFixed(2)}억</strong></p>
                   <p className="story-tt-range">
-                    가능성 높은 범위: {row.inner_eok[0].toFixed(2)} ~ {row.inner_eok[1].toFixed(2)}억
-                  </p>
-                  <p className="story-tt-range">
-                    전체 범위: {row.outer_eok[0].toFixed(2)} ~ {row.outer_eok[1].toFixed(2)}억
+                    예상 범위(p10~p90): {row.band_eok[0].toFixed(2)} ~ {row.band_eok[1].toFixed(2)}억
                   </p>
                 </div>
               );
@@ -943,13 +942,13 @@ function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p90Ret }) {
           <Legend
             wrapperStyle={{ fontSize: 11 }}
             payload={[
-              { value: "예상 가격 (중앙값)", type: "line", color: "#4361ee" },
-              { value: "가능성 높은 범위", type: "rect", color: "#4361ee99" },
-              { value: "전체 범위", type: "rect", color: "#4361ee33" },
+              { value: "예상 가격 (중앙값 · p50)", type: "line", color: "#4361ee" },
+              { value: "예상 범위 (p10 ~ p90)", type: "rect", color: "#4361ee55" },
             ]}
           />
-          <Area type="monotone" dataKey="outer_eok" stroke="none" fill="#4361ee" fillOpacity={0.12} />
-          <Area type="monotone" dataKey="inner_eok" stroke="none" fill="#4361ee" fillOpacity={0.28} />
+          {/* p10~p90 음영 밴드 (라인 아래로 깔리도록 먼저 렌더) */}
+          <Area type="monotone" dataKey="band_eok" stroke="none" fill="#4361ee" fillOpacity={0.22} />
+          {/* 중앙값(p50) 라인 — 가장 위 */}
           <Line
             type="monotone" dataKey="median_eok" stroke="#4361ee" strokeWidth={2.5} dot={false}
             isAnimationActive={false}
@@ -1147,6 +1146,7 @@ function buildStoryPrompt(result, aptInfo, targetMonths) {
 
 작성 규칙:
 - 모든 가격은 "OO.O억"으로 통일 (만원/㎡ 단위 금지).
+- 가격 숫자 뒤에 조사 "으로/로"를 붙이지 마세요. 대신 "약 3.26억까지 하락", "약 3.26억 수준으로 예상", "약 3.26억 부근" 같이 작성.
 - 단정형 금지. "~할 가능성이 큽니다", "~할 수도 있습니다" 형태로 작성.
 - "위기", "폭락" 등 자극어 회피. 부정 정보는 차분하게 전달.
 - 한 문장 80자 이내, 한 단락 4문장 이내.
@@ -1451,7 +1451,8 @@ function StorytellingReport({ result, apt, targetMonths }) {
 
   if (!story) return null;
 
-  const milestones = extractMilestones(result.forecast_points, result.base_price_manwon);
+  const milestones = extractMilestones(result.forecast_points, result.base_price_manwon, targetMonths);
+  const yearsLabel = (targetMonths / 12).toFixed(1);
 
   return (
     <div className="story-report">
@@ -1462,21 +1463,22 @@ function StorytellingReport({ result, apt, targetMonths }) {
         <div className="story-summary-pills">
           <span>현재 <strong>{formatEok(result.base_price_manwon)}</strong></span>
           <span>→</span>
-          <span>{(targetMonths / 12).toFixed(1)}년 후 <strong>{formatEok(result.estimated_price_manwon)}</strong></span>
+          <span>{yearsLabel}년 후 <strong>{formatEok(result.estimated_price_manwon)}</strong></span>
         </div>
       </section>
 
-      {/* ② 단기 5년 시세 전망 */}
+      {/* ② 시세 전망 */}
       <section className="story-section">
-        <h3 className="story-h">② 단기 5년 시세 전망</h3>
+        <h3 className="story-h">② {yearsLabel}년 시세 전망</h3>
         <p className="story-sub">
-          파란 선은 예상 가격(중앙값)이고, 진한 영역은 가능성 높은 범위, 옅은 영역은 전체 범위입니다.
+          파란 선은 예상 가격(중앙값, p50)이고, 음영 영역은 예상 범위(p10 ~ p90)입니다.
         </p>
         <FiveYearFanChart
           forecast={result.forecast_points}
           basePriceManwon={result.base_price_manwon}
           p10Ret={result.return_pct_p10}
           p90Ret={result.return_pct_p90}
+          targetMonths={targetMonths}
         />
         {milestones.length > 0 && (
           <table className="story-milestone-table">
@@ -3173,8 +3175,7 @@ export default function App() {
         </div>
         <h1>AI 기반 부동산 시나리오 분석</h1>
         <p>
-          Diffusion-TFT 자연어 조건 검색과 Phase 군집 기반 대표 시나리오 분석을
-          TFT P10·P50·P90 분위수 기반 확률로 제공합니다.
+          Diffusion-TFT 기반 집값 분석을 제공합니다<div className=""></div>
         </p>
       </section>
 
