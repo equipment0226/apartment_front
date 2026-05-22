@@ -9,12 +9,14 @@ const API_BASE = "https://apartmentprediction-production.up.railway.app";
 
 // ---------------------------------------------------------------------------
 // Deepseek 설정 (일반인용 6-섹션 스토리텔링 리포트 생성)
-// ⚠ 보안 주의: 클라이언트 코드에 API 키가 노출되면 공개됩니다.
-//   프로덕션에서는 백엔드 프록시 또는 환경변수(VITE_DEEPSEEK_KEY)를 권장합니다.
+// ⚠ 보안: 프론트엔드 번들에 LLM 키를 절대 포함하지 마세요.
+//   Vite 의 VITE_* 환경변수도 빌드 시 그대로 번들에 인라인되어 노출됩니다.
+//   반드시 백엔드 프록시(예: /api/llm)를 통해 호출하세요.
+//   임시로 로컬 개발에만 import.meta.env.VITE_DEEPSEEK_KEY 를 사용할 수 있지만,
+//   .env 파일은 .gitignore 에 포함되어야 하고 빌드 산출물을 외부에 배포해서는 안 됩니다.
 // ---------------------------------------------------------------------------
 const DEEPSEEK_API_KEY =
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_DEEPSEEK_KEY) ||
-  "REDACTED_DEEPSEEK_KEY";
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_DEEPSEEK_KEY) || "";
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_MODEL = "deepseek-chat";
 
