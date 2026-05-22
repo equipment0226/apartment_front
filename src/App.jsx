@@ -858,23 +858,30 @@ function extractMilestones(forecast, basePriceManwon, maxMonths) {
 }
 
 // Fan chart 데이터 생성: 중앙값(p50) 라인 + p10~p90 단일 음영 밴드
-// p10Ret / p90Ret 는 base price 대비 누적 수익률(%)이므로,
-// 음영 밴드는 그 절대값이 아니라 "median 주변 대칭 spread"로 그려야 p50이 항상 중앙에 위치한다.
-function buildFanChartData(forecast, p10Ret, p90Ret, maxMonths) {
+// 백엔드는 forecast_points 에 시점별 p50 가격 path 만 보내고, p10/p50/p90 누적수익률은
+// 시나리오 전체 스칼라로만 제공한다. 따라서 음영은 median path 를 기준으로 비대칭 spread
+// (p50→p10, p50→p90 폭이 다를 수 있음)를 시간에 비례해 벌려서 그린다.
+function buildFanChartData(forecast, p10Ret, p50Ret, p90Ret, maxMonths) {
   if (!forecast?.length) return [];
   const limit = Math.max(1, Math.min(forecast.length, Number(maxMonths) || forecast.length));
   const pts = forecast.slice(0, limit);
-  const loRet = (p10Ret ?? -10) / 100;   // 비관 (p10) 수익률
-  const hiRet = (p90Ret ?? 10) / 100;    // 낙관 (p90) 수익률
-  // p10~p90 폭의 절반 = median 기준 대칭 반폭 (분위 역전 안전)
-  const halfSpread = Math.abs(hiRet - loRet) / 2;
+  const loRet = (p10Ret ?? -10) / 100;
+  const midRet = (p50Ret ?? 0) / 100;
+  const hiRet = (p90Ret ?? 10) / 100;
+  // p50 기준 아래/위 spread (분위 역전 시 안전하게 0 이상으로 클램프)
+  const downSpread = Math.max(0, midRet - loRet); // p50 - p10
+  const upSpread = Math.max(0, hiRet - midRet);   // p90 - p50
+  // 둘 다 0 이면(데이터 누락 등) 시각화를 위해 최소 5% 폭으로 fallback
+  const fallback = downSpread + upSpread < 1e-6;
+  const down = fallback ? 0.05 : downSpread;
+  const up = fallback ? 0.05 : upSpread;
   const N = pts.length;
   return pts.map((p, i) => {
     // 불확실성은 시간에 비례하여 확장 (sqrt 스케일)
     const widen = Math.sqrt((i + 1) / N);
     const med = Number(p.price);
-    const bandHi = med * (1 + halfSpread * widen);
-    const bandLo = med * (1 - halfSpread * widen);
+    const bandHi = med * (1 + up * widen);
+    const bandLo = med * (1 - down * widen);
     return {
       t: normalizeTsLabel(p.timestamp || `+${i + 1}m`),
       median_eok: med / 10000,
@@ -886,10 +893,10 @@ function buildFanChartData(forecast, p10Ret, p90Ret, maxMonths) {
 // ────────────────────────────────────────────────────────────────────────
 // 차트 1: Fan chart (중앙값 라인 + p10~p90 음영)
 // ────────────────────────────────────────────────────────────────────────
-function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p90Ret, targetMonths }) {
+function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p50Ret, p90Ret, targetMonths }) {
   const data = useMemo(
-    () => buildFanChartData(forecast, p10Ret, p90Ret, targetMonths),
-    [forecast, p10Ret, p90Ret, targetMonths]
+    () => buildFanChartData(forecast, p10Ret, p50Ret, p90Ret, targetMonths),
+    [forecast, p10Ret, p50Ret, p90Ret, targetMonths]
   );
   const milestones = useMemo(
     () => extractMilestones(forecast, basePriceManwon, targetMonths),
@@ -1473,6 +1480,7 @@ function StorytellingReport({ result, apt, targetMonths }) {
           forecast={result.forecast_points}
           basePriceManwon={result.base_price_manwon}
           p10Ret={result.return_pct_p10}
+          p50Ret={result.return_pct_p50}
           p90Ret={result.return_pct_p90}
           targetMonths={targetMonths}
         />
