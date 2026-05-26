@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  ComposedChart, Area, Legend, Scatter, ScatterChart, ZAxis,
+  ComposedChart, Area, Legend,
 } from "recharts";
 import nubjukImg from "./nubjuk.png";
 
@@ -78,48 +78,46 @@ function buildTrendPathFromIndices(points, xIndexMap, width, height, minY, maxY)
 // ---------------------------------------------------------------------------
 // 공통: 아파트 선택 필터
 // ---------------------------------------------------------------------------
-function ApartmentFilter({ aptGu, setAptGu, aptDong, setAptDong, aptComplex, setAptComplex, aptBuilding, setAptBuilding, filters, filterError }) {
+function ApartmentFilter({ aptGu, setAptGu, aptDong, setAptDong, aptComplex, setAptComplex, aptBuilding, setAptBuilding, aptFloor, setAptFloor, filters, filterError }) {
   return (
     <>
       {filters.encoding_warning ? <p className="sim-error">{filters.encoding_warning}</p> : null}
       {filterError ? <p className="sim-error">{filterError}</p> : null}
       <div className="sim-apartment-grid">
         <label className="sim-field">
-          <span>시</span>
-          <select value="서울특별시" disabled>
-            <option value="서울특별시">서울특별시</option>
-          </select>
-        </label>
-        <label className="sim-field">
           <span>구</span>
-          <select value={aptGu} onChange={(e) => { setAptGu(e.target.value); setAptDong(""); setAptComplex(""); setAptBuilding(""); }}>
+          <select value={aptGu} onChange={(e) => { setAptGu(e.target.value); setAptDong(""); setAptComplex(""); setAptBuilding(""); setAptFloor(""); }}>
             <option value="">선택</option>
             {(filters.gu_options || []).map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
         </label>
         <label className="sim-field">
           <span>동</span>
-          <select value={aptDong} onChange={(e) => { setAptDong(e.target.value); setAptComplex(""); setAptBuilding(""); }}>
+          <select value={aptDong} onChange={(e) => { setAptDong(e.target.value); setAptComplex(""); setAptBuilding(""); setAptFloor(""); }}>
             <option value="">선택</option>
             {(filters.dong_options || []).map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
         </label>
         <label className="sim-field">
           <span>단지명</span>
-          <select value={aptComplex} onChange={(e) => { setAptComplex(e.target.value); setAptBuilding(""); }}>
+          <select value={aptComplex} onChange={(e) => { setAptComplex(e.target.value); setAptBuilding(""); setAptFloor(""); }}>
             <option value="">선택</option>
             {(filters.complex_options || []).map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
         </label>
         <label className="sim-field">
-          <span>아파트 동</span>
+          <span>동/층</span>
           <select value={aptBuilding} onChange={(e) => setAptBuilding(e.target.value)}>
             <option value="">동 선택</option>
             {(filters.building_options || []).map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
+          <select value={aptFloor} onChange={(e) => setAptFloor(e.target.value)}>
+            <option value="">층 선택</option>
+            {(filters.floor_options || []).map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
         </label>
       </div>
-      <p className="sim-meta-inline">기준시세(최근 실거래): <strong>{formatManwon(filters.base_price_manwon)}</strong> · 매칭 {filters.matched_rows || 0}건</p>
+      <p className="sim-meta-inline">기준시세: <strong>{formatManwon(filters.base_price_manwon)}</strong> · 매칭 {filters.matched_rows || 0}건</p>
     </>
   );
 }
@@ -257,9 +255,9 @@ function TrendChart({ historyPoints, forecastPoints, label }) {
 // ---------------------------------------------------------------------------
 // useApartmentFilters 훅
 // ---------------------------------------------------------------------------
-function useApartmentFilters(aptGu, aptDong, aptComplex, aptBuilding) {
+function useApartmentFilters(aptGu, aptDong, aptComplex, aptBuilding, aptFloor) {
   const [filters, setFilters] = useState({
-    si_options: ["서울특별시"], gu_options: [], dong_options: [], complex_options: [], building_options: [],
+    gu_options: [], dong_options: [], complex_options: [], building_options: [], floor_options: [],
     matched_rows: 0, base_price_manwon: null, encoding_warning: "",
   });
   const [filterError, setFilterError] = useState("");
@@ -274,6 +272,7 @@ function useApartmentFilters(aptGu, aptDong, aptComplex, aptBuilding) {
         if (aptDong) params.set("dong", aptDong);
         if (aptComplex) params.set("complex_name", aptComplex);
         if (aptBuilding) params.set("building", aptBuilding);
+        if (aptFloor) params.set("floor", aptFloor);
         const res = await fetch(`${API_BASE}/apartment/filters${params.toString() ? `?${params}` : ""}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "아파트 필터 오류");
@@ -284,7 +283,7 @@ function useApartmentFilters(aptGu, aptDong, aptComplex, aptBuilding) {
     }
     load();
     return () => { cancelled = true; };
-  }, [aptGu, aptDong, aptComplex, aptBuilding]);
+  }, [aptGu, aptDong, aptComplex, aptBuilding, aptFloor]);
 
   return { filters, filterError };
 }
@@ -297,7 +296,8 @@ function UserAnalysisTab() {
   const [aptDong, setAptDong] = useState("");
   const [aptComplex, setAptComplex] = useState("");
   const [aptBuilding, setAptBuilding] = useState("");
-  const { filters, filterError } = useApartmentFilters(aptGu, aptDong, aptComplex, aptBuilding);
+  const [aptFloor, setAptFloor] = useState("");
+  const { filters, filterError } = useApartmentFilters(aptGu, aptDong, aptComplex, aptBuilding, aptFloor);
 
   const [queryText, setQueryText] = useState("");
   const [targetMonths, setTargetMonths] = useState(12);
@@ -318,11 +318,11 @@ function UserAnalysisTab() {
           query: queryText.trim(),
           target_months: targetMonths,
           apartment: {
-            si: "서울특별시",
             gu: aptGu || undefined,
             dong: aptDong || undefined,
             complex_name: aptComplex || undefined,
             building: aptBuilding || undefined,
+            floor: aptFloor || undefined,
           },
         }),
       });
@@ -350,6 +350,7 @@ function UserAnalysisTab() {
           aptDong={aptDong} setAptDong={setAptDong}
           aptComplex={aptComplex} setAptComplex={setAptComplex}
           aptBuilding={aptBuilding} setAptBuilding={setAptBuilding}
+          aptFloor={aptFloor} setAptFloor={setAptFloor}
           filters={filters} filterError={filterError}
         />
 
@@ -366,7 +367,7 @@ function UserAnalysisTab() {
         <label className="sim-field" style={{ marginTop: 12 }}>
           <span>예측 기간: <strong>{targetMonths}개월</strong></span>
           <input
-            type="range" min={1} max={240} value={targetMonths}
+            type="range" min={1} max={120} value={targetMonths}
             onChange={(e) => setTargetMonths(Number(e.target.value))}
           />
         </label>
@@ -410,7 +411,7 @@ function UserAnalysisTab() {
             {/* 🆕 6-섹션 일반인용 스토리텔링 리포트 (Deepseek) */}
             <StorytellingReport
               result={result}
-              apt={{ si: "서울특별시", gu: aptGu, dong: aptDong, complex_name: aptComplex, building: aptBuilding }}
+              apt={{ gu: aptGu, dong: aptDong, complex_name: aptComplex, building: aptBuilding, floor: aptFloor }}
               targetMonths={targetMonths}
             />
           </>
@@ -892,7 +893,7 @@ function buildFanChartData(forecast, p10Ret, p50Ret, p90Ret, maxMonths) {
 // ────────────────────────────────────────────────────────────────────────
 // 차트 1: Fan chart (중앙값 라인 + p10~p90 음영)
 // ────────────────────────────────────────────────────────────────────────
-function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p50Ret, p90Ret, targetMonths, transactions }) {
+function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p50Ret, p90Ret, targetMonths }) {
   const data = useMemo(
     () => buildFanChartData(forecast, p10Ret, p50Ret, p90Ret, targetMonths),
     [forecast, p10Ret, p50Ret, p90Ret, targetMonths]
@@ -901,25 +902,14 @@ function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p50Ret, p90Ret, t
     () => extractMilestones(forecast, basePriceManwon, targetMonths),
     [forecast, basePriceManwon, targetMonths]
   );
-
-  // 과거 36개월 실거래 산점 + 미래 fan 을 하나의 시계열로 합치기
-  const merged = useMemo(() => {
-    const past = (transactions || []).map((t) => ({
-      t: String(t.date || t.timestamp || "").slice(0, 7),
-      tx_eok: Number(t.price_manwon) / 10000,
-    })).filter((r) => Number.isFinite(r.tx_eok));
-    const fut = data.map((d) => ({ ...d }));
-    return [...past, ...fut];
-  }, [transactions, data]);
-
-  if (!merged.length) return <p className="sim-placeholder">예측 데이터가 없습니다.</p>;
+  if (!data.length) return <p className="sim-placeholder">예측 데이터가 없습니다.</p>;
 
   const milestoneByTs = new Map(milestones.map((m) => [data[m.idx]?.t, m]));
 
   return (
     <div className="story-fan-wrap">
       <ResponsiveContainer width="100%" height={300}>
-        <ComposedChart data={merged} margin={{ top: 16, right: 24, bottom: 8, left: 8 }}>
+        <ComposedChart data={data} margin={{ top: 16, right: 24, bottom: 8, left: 8 }}>
           <CartesianGrid stroke="#2a2e3d" strokeDasharray="3 3" />
           <XAxis dataKey="t" tick={{ fontSize: 10, fill: "#9ba3b8" }} interval="preserveStartEnd" />
           <YAxis
@@ -935,17 +925,10 @@ function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p50Ret, p90Ret, t
               return (
                 <div className="story-tooltip">
                   <p className="story-tt-ts">{label}</p>
-                  {row.tx_eok != null && (
-                    <p>실거래: <strong>{row.tx_eok.toFixed(2)}억</strong></p>
-                  )}
-                  {row.median_eok != null && (
-                    <>
-                      <p>예상(p50): <strong>{row.median_eok.toFixed(2)}억</strong></p>
-                      <p className="story-tt-range">
-                        예상 범위(p10~p90): {row.band_eok[0].toFixed(2)} ~ {row.band_eok[1].toFixed(2)}억
-                      </p>
-                    </>
-                  )}
+                  <p>예상(p50): <strong>{row.median_eok.toFixed(2)}억</strong></p>
+                  <p className="story-tt-range">
+                    예상 범위(p10~p90): {row.band_eok[0].toFixed(2)} ~ {row.band_eok[1].toFixed(2)}억
+                  </p>
                 </div>
               );
             }}
@@ -953,20 +936,17 @@ function FiveYearFanChart({ forecast, basePriceManwon, p10Ret, p50Ret, p90Ret, t
           <Legend
             wrapperStyle={{ fontSize: 11 }}
             payload={[
-              { value: "과거 3년 실거래", type: "circle", color: "#f77f00" },
               { value: "예상 가격 (중앙값 · p50)", type: "line", color: "#4361ee" },
               { value: "예상 범위 (p10 ~ p90)", type: "rect", color: "#4361ee55" },
             ]}
           />
           {/* p10~p90 음영 밴드 (라인 아래로 깔리도록 먼저 렌더) */}
-          <Area type="monotone" dataKey="band_eok" stroke="none" fill="#4361ee" fillOpacity={0.22} connectNulls={false} />
+          <Area type="monotone" dataKey="band_eok" stroke="none" fill="#4361ee" fillOpacity={0.22} />
           {/* 중앙값(p50) 라인 — 가장 위 */}
           <Line
             type="monotone" dataKey="median_eok" stroke="#4361ee" strokeWidth={2.5} dot={false}
-            isAnimationActive={false} connectNulls={false}
+            isAnimationActive={false}
           />
-          {/* 과거 실거래 산점 */}
-          <Scatter dataKey="tx_eok" fill="#f77f00" shape="circle" />
           {/* 마일스톤 라벨 점 */}
           <Line
             type="monotone" dataKey="median_eok" stroke="transparent" isAnimationActive={false}
@@ -1674,7 +1654,6 @@ function StorytellingReport({ result, apt, targetMonths }) {
           p50Ret={result.return_pct_p50}
           p90Ret={result.return_pct_p90}
           targetMonths={targetMonths}
-          transactions={result.transactions_3y}
         />
         {milestones.length > 0 && (
           <table className="story-milestone-table">
@@ -1795,7 +1774,8 @@ function ClusterAnalysisTab() {
   const [aptDong, setAptDong] = useState("");
   const [aptComplex, setAptComplex] = useState("");
   const [aptBuilding, setAptBuilding] = useState("");
-  const { filters, filterError } = useApartmentFilters(aptGu, aptDong, aptComplex, aptBuilding);
+  const [aptFloor, setAptFloor] = useState("");
+  const { filters, filterError } = useApartmentFilters(aptGu, aptDong, aptComplex, aptBuilding, aptFloor);
 
   const fetchClusters = async () => {
     setLoading(true);
@@ -1806,6 +1786,7 @@ function ClusterAnalysisTab() {
       if (aptDong) params.set("dong", aptDong);
       if (aptComplex) params.set("complex_name", aptComplex);
       if (aptBuilding) params.set("building", aptBuilding);
+      if (aptFloor) params.set("floor", aptFloor);
       const res = await fetch(`${API_BASE}/simulation/cluster-analysis?${params}`);
       if (!res.ok) {
         const j = await res.json();
@@ -1839,6 +1820,7 @@ function ClusterAnalysisTab() {
           aptDong={aptDong} setAptDong={setAptDong}
           aptComplex={aptComplex} setAptComplex={setAptComplex}
           aptBuilding={aptBuilding} setAptBuilding={setAptBuilding}
+          aptFloor={aptFloor} setAptFloor={setAptFloor}
           filters={filters} filterError={filterError}
         />
 
