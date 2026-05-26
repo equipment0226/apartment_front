@@ -289,7 +289,7 @@ function useApartmentFilters(aptGu, aptDong, aptComplex, aptBuilding, aptFloor) 
 }
 
 // ===========================================================================
-// Tab 1: User 분석 (Diffusion-TFT + 자연어 쿼리)
+// Tab 1: User 분석 (VAR-TFT + 자연어 쿼리)
 // ===========================================================================
 function UserAnalysisTab() {
   const [aptGu, setAptGu] = useState("");
@@ -373,7 +373,7 @@ function UserAnalysisTab() {
         </label>
 
         <button className="sim-run-btn" onClick={handleSearch} disabled={running || !queryText.trim()}>
-          {running ? "최유사 Diffusion-TFT 시나리오 탐색 중..." : "유사 시나리오 검색 및 분석"}
+          {running ? "최유사 VAR-TFT 시나리오 탐색 중..." : "유사 시나리오 검색 및 분석"}
         </button>
         {error ? <p className="sim-error">{error}</p> : null}
       </div>
@@ -1179,7 +1179,7 @@ function buildStoryPrompt(result, aptInfo, targetMonths) {
   const user = `[대상 아파트]
 ${aptLabel} · 현재 가격: 약 ${eokBase}억
 
-[모델 예측 (Diffusion-TFT)]
+[모델 예측 (VAR-TFT)]
 - 예측 기간: ${targetMonths}개월(약 ${years}년)
 - 중앙값 예상가: ${eokEst}억 (현재 대비 ${result.return_pct_p50?.toFixed?.(1) ?? "?"}%)
 - 가능성 높은 범위(상): +${result.return_pct_p90?.toFixed?.(1) ?? "?"}% (낙관)
