@@ -3342,8 +3342,8 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
 
   const TABS = [
-    { id: "user", label: "User 분석", sub: "Diffusion-TFT" },
-    { id: "cluster", label: "대표 시나리오 분석", sub: "Diffusion-TFT · Phase 군집 분석" },
+    { id: "user", label: "User 분석", sub: "VAR-TFT" },
+    { id: "cluster", label: "대표 시나리오 분석", sub: "VAR-TFT · Phase 군집 분석" },
   ];
 
   if (showAdmin) {
@@ -3368,7 +3368,7 @@ export default function App() {
         </div>
         <h1>AI 기반 부동산 시나리오 분석</h1>
         <p>
-          Diffusion-TFT 기반 집값 분석을 제공합니다<div className=""></div>
+          VAR-TFT 기반 집값 분석을 제공합니다<div className=""></div>
         </p>
       </section>
 
