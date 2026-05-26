@@ -1120,82 +1120,253 @@ function PersonaActions({ actions }) {
 // ────────────────────────────────────────────────────────────────────────
 // 6-섹션 스토리텔링 리포트 오케스트레이터
 // ────────────────────────────────────────────────────────────────────────
+
+// 한글 라벨 + 카테고리 매핑 (best-effort, LLM 측에서 추가 풀이 가능)
+const FEATURE_META = {
+  ecos__base_rate:           { label: "기준금리",          category: "금리" },
+  ecos__cd_91d_rate:         { label: "CD 91일 금리",     category: "금리" },
+  ecos__mortgage_rate_new:   { label: "신규 주담대 금리", category: "금리" },
+  ecos__cpi_housing:         { label: "주거 물가(CPI)",   category: "거시" },
+  ecos__unemployment_rate:   { label: "실업률",            category: "거시" },
+  reb__sale_avg_price:       { label: "매매 평균가",       category: "수급" },
+  reb__sale_index:           { label: "매매가격지수",      category: "수급" },
+  reb__sale_supply_demand:   { label: "매매 수급",         category: "수급" },
+  reb__apt_jeonse_avg_price: { label: "전세 평균가",       category: "수급" },
+  reb__jeonse_supply_demand: { label: "전세 수급",         category: "수급" },
+  reb__monthly_rent_supply_demand: { label: "월세 수급",   category: "수급" },
+};
+function featureLabel(name) {
+  if (FEATURE_META[name]) return FEATURE_META[name].label;
+  if (name?.startsWith("policy__")) return `정책: ${name.replace("policy__", "")}`;
+  return name;
+}
+function featureCategory(name) {
+  if (FEATURE_META[name]) return FEATURE_META[name].category;
+  if (name?.startsWith("policy__")) return "정책";
+  return "기타";
+}
+
+/**
+ * forecast_points 시계열에서 "최종값에 대한 미분(numeric gradient)" 기반
+ * feature 영향성을 추출하고, rule-based 이벤트(변곡점·기여도 임계치 초과)만 필터링.
+ *
+ * 절차:
+ *  1) 각 step t 에서 ΔY_t = level_p50_manwon[t] - level_p50_manwon[t-1]
+ *     각 feature i 에서 ΔX_i,t = X_i[t] - X_i[t-1]
+ *  2) 단변량 finite-difference 민감도:
+ *        β_i = Σ_t (ΔY_t · ΔX_i,t) / Σ_t (ΔX_i,t²)
+ *     (OLS slope of ΔY on ΔX_i, 절편 0)
+ *  3) per-step contribution_i,t = β_i · ΔX_i,t
+ *     share_i,t = |contribution_i,t| / Σ_j |contribution_j,t|
+ *  4) 이벤트 트리거:
+ *     (a) 변곡점:  sign(ΔY_t) ≠ sign(ΔY_{t-1})        (방향 전환)
+ *     (b) 임계치:  max_i share_i,t ≥ 0.30              (특정 변수 폭증)
+ *  5) 각 이벤트 step 의 top-3 기여 변수를 반환.
+ */
+function summarizeFeatureImpact(forecastPoints) {
+  const pts = (forecastPoints || []).filter((p) =>
+    Number.isFinite(Number(p.level_p50_manwon))
+  );
+  if (pts.length < 3) return { events: [], sensitivities: [], horizon: 0 };
+
+  const EXCLUDE = new Set([
+    "timestamp", "step", "price",
+    "level_p10", "level_p50", "level_p90",
+    "level_p10_manwon", "level_p50_manwon", "level_p90_manwon",
+    "tft_raw_p50", "var_baseline",
+    "hybrid_logret_p10", "hybrid_logret_p50", "hybrid_logret_p90",
+  ]);
+  const featureCols = Object.keys(pts[0]).filter(
+    (k) => !EXCLUDE.has(k) && Number.isFinite(Number(pts[0][k]))
+  );
+
+  const prices = pts.map((p) => Number(p.level_p50_manwon));
+  const dY = prices.map((v, i) => (i === 0 ? 0 : v - prices[i - 1]));
+  const dYpct = prices.map((v, i) =>
+    i === 0 ? 0 : ((v - prices[i - 1]) / Math.max(Math.abs(prices[i - 1]), 1e-9)) * 100
+  );
+
+  // dX matrix
+  const dX = {};
+  featureCols.forEach((c) => {
+    const col = pts.map((p) => Number(p[c]));
+    dX[c] = col.map((v, i) => (i === 0 ? 0 : v - col[i - 1]));
+  });
+
+  // 2) β_i = Σ(dY·dX_i)/Σ(dX_i²)
+  const beta = {};
+  featureCols.forEach((c) => {
+    let num = 0;
+    let den = 0;
+    for (let t = 1; t < pts.length; t++) {
+      const dx = dX[c][t];
+      if (!Number.isFinite(dx)) continue;
+      num += dY[t] * dx;
+      den += dx * dx;
+    }
+    beta[c] = den > 1e-18 ? num / den : 0;
+  });
+
+  // 3) per-step contributions + shares
+  const events = [];
+  let prevSignDy = 0;
+  for (let t = 1; t < pts.length; t++) {
+    const contribs = featureCols.map((c) => {
+      const dx = dX[c][t];
+      const contrib = Number.isFinite(dx) ? beta[c] * dx : 0;
+      return { name: c, dx, contrib };
+    });
+    const totalAbs = contribs.reduce((s, x) => s + Math.abs(x.contrib), 0);
+    const shared = contribs.map((x) => ({
+      ...x,
+      share: totalAbs > 1e-12 ? Math.abs(x.contrib) / totalAbs : 0,
+    }));
+    const topShare = Math.max(...shared.map((x) => x.share));
+    const curSignDy = dY[t] > 0 ? 1 : dY[t] < 0 ? -1 : 0;
+    const isInflection =
+      t > 1 && prevSignDy !== 0 && curSignDy !== 0 && curSignDy !== prevSignDy;
+    const isThreshold = topShare >= 0.30;
+    if (isInflection || isThreshold) {
+      const top3 = shared
+        .filter((x) => Math.abs(x.contrib) > 0)
+        .sort((a, b) => b.share - a.share)
+        .slice(0, 3)
+        .map((x) => ({
+          name: x.name,
+          label: featureLabel(x.name),
+          category: featureCategory(x.name),
+          share_pct: Number((x.share * 100).toFixed(1)),
+          delta: Number(x.dx.toFixed(6)),
+          contrib_manwon: Number(x.contrib.toFixed(2)),
+          direction: x.contrib >= 0 ? "↑" : "↓",
+        }));
+      events.push({
+        ts: String(pts[t].timestamp || "").slice(0, 10),
+        step: t,
+        price_eok: Number((prices[t] / 10000).toFixed(2)),
+        dPrice_pct: Number(dYpct[t].toFixed(2)),
+        trigger: isInflection && isThreshold ? "inflection+threshold"
+              : isInflection ? "inflection" : "threshold",
+        top: top3,
+      });
+    }
+    if (curSignDy !== 0) prevSignDy = curSignDy;
+  }
+
+  // 글로벌 민감도 랭킹: |β_i| × σ(dX_i) (스케일 보정한 영향력)
+  const sensitivities = featureCols
+    .map((c) => {
+      const dxArr = dX[c].slice(1);
+      const m = dxArr.reduce((s, v) => s + v, 0) / Math.max(dxArr.length, 1);
+      const variance =
+        dxArr.reduce((s, v) => s + (v - m) ** 2, 0) / Math.max(dxArr.length, 1);
+      const std = Math.sqrt(variance);
+      const score = Math.abs(beta[c]) * std;
+      return {
+        name: c,
+        label: featureLabel(c),
+        category: featureCategory(c),
+        beta: Number(beta[c].toFixed(6)),
+        sensitivity_score: Number(score.toFixed(4)),
+      };
+    })
+    .sort((a, b) => b.sensitivity_score - a.sensitivity_score)
+    .slice(0, 8);
+
+  return { events, sensitivities, horizon: pts.length };
+}
+
 function buildStoryPrompt(result, aptInfo, targetMonths) {
   const base = result.base_price_manwon;
   const est = result.estimated_price_manwon;
   const eokBase = base ? (base / 10000).toFixed(2) : "?";
   const eokEst = est ? (est / 10000).toFixed(2) : "?";
-  const changed = result.changed_indicators || {};
-  const changedLines = Object.entries(changed)
-    .map(([k, v]) => `  - ${indicatorLabel(k)}: ${v}`)
-    .join("\n") || "  (사용자 지정 변경 없음)";
-  const probs = result.probabilities || {};
-  const risk = result.risk || {};
   const aptLabel = [aptInfo.gu, aptInfo.dong, aptInfo.complex_name]
     .filter(Boolean).join(" ") || "(미선택)";
   const years = (targetMonths / 12).toFixed(1);
 
-  const system = `당신은 부동산 데이터 분석가입니다. 일반 시민이 어려운 통계 용어 없이 \
-"위에서부터 읽으며 자연스럽게 의사결정에 도달"하도록 친근한 설명체("~합니다")로 작성합니다.
+  // 데이터 → XAI: 최종값에 대한 미분(numeric gradient) 기반 영향성 추출
+  const impact = summarizeFeatureImpact(result.forecast_points);
+
+  const eventText = impact.events.length === 0
+    ? "  (변곡점·임계치 초과 이벤트 없음 — 시나리오가 비교적 단조롭게 흐릅니다)"
+    : impact.events.map((e) => {
+        const head = `  - [${e.trigger}] ${e.ts} (step ${e.step}) · 가격 ${e.dPrice_pct >= 0 ? "+" : ""}${e.dPrice_pct}% (≈${e.price_eok}억)`;
+        const lines = e.top.map((c) =>
+          `      · ${c.label} [${c.category}] ${c.direction} 기여도 ${c.share_pct}% (Δfeature=${c.delta})`
+        ).join("\n");
+        return `${head}\n${lines}`;
+      }).join("\n");
+
+  const sensText = impact.sensitivities.length === 0
+    ? "  (민감도 산출 불가)"
+    : impact.sensitivities.map((s) =>
+        `  - ${s.label} [${s.category}] sensitivity=${s.sensitivity_score} (β=${s.beta})`
+      ).join("\n");
+
+  const changed = result.changed_indicators || {};
+  const changedLines = Object.entries(changed)
+    .map(([k, v]) => `  - ${featureLabel(k)}: ${v}`)
+    .join("\n") || "  (사용자 지정 변경 없음)";
+
+  const system = `당신은 경영진 보고용 경제 분석가입니다. 일반 시민도 이해하도록 \
+"위에서부터 읽으며 자연스럽게 의사결정에 도달"하는 친근한 설명체("~합니다")로 작성합니다.
 
 작성 규칙:
-- 모든 가격은 "OO.O억"으로 통일 (만원/㎡ 단위 금지).
-- 가격 숫자 뒤에 조사 "으로/로"를 붙이지 마세요. 대신 "약 3.26억까지 하락", "약 3.26억 수준으로 예상", "약 3.26억 부근" 같이 작성.
-- 단정형 금지. "~할 가능성이 큽니다", "~할 수도 있습니다" 형태로 작성.
-- "위기", "폭락" 등 자극어 회피. 부정 정보는 차분하게 전달.
-- 한 문장 80자 이내, 한 단락 4문장 이내.
-- 변수명은 친숙하게 풀어 사용 (예: "LTV 레짐" → "주택담보대출 한도 규제").
+- 모든 가격은 "OO.O억"으로 통일. 가격 뒤에 조사 "으로/로" 금지 (예: "약 3.26억 수준으로 예상").
+- 단정형 금지. "~할 가능성이 큽니다", "~할 수도 있습니다" 형태.
+- "위기·폭락" 등 자극어 금지. 한 문장 80자 이내, 한 단락 4문장 이내.
+- factors·summary 는 반드시 [XAI 입력 — 이벤트] 와 [XAI 입력 — 글로벌 민감도] 데이터만 근거로 합니다. 추측 금지.
+- summary 는 이벤트의 시간 흐름(변곡점·기여도 폭증 지점)을 그대로 따라가며 3~5문장으로 서술합니다.
 
-반드시 아래 스키마의 순수 JSON 객체만 반환하세요 (코드펜스 금지, 설명 금지):
+반드시 아래 스키마의 순수 JSON 객체만 반환 (코드펜스/설명 금지):
 {
-  "summary": "3~5문장. 현재(${eokBase}억) → 단기 변동 → ${years}년 후 예상가(${eokEst}억). '단, ~할 경우 ~까지 갈 수도 있다' 톤 포함.",
+  "summary": "3~5문장. 초기 → 변곡점 → 후반 흐름. 각 이벤트 시점의 핵심 변수와 방향을 1~2개 인용.",
   "factors": [
-    {"category": "정책|금리|수급", "name": "친숙한 변수명", "impact": "↑↑|↑|↓|↓↓", "explanation": "한 줄 인과"}
+    {"category": "정책|금리|수급|거시", "name": "친숙한 변수명", "impact": "↑↑|↑|↓|↓↓",
+     "explanation": "이 변수가 어느 시점에서 얼마의 기여도로 작용했는지 구체 수치 1개 포함."}
   ],
-  "bull": {
-    "rate": "금리 환경 한 줄",
-    "supply": "수급 환경 한 줄",
-    "policy": "규제 환경 한 줄",
-    "expected_price_eok": "숫자(억)",
-    "narrative": "만약 ~한다면 ~억까지 오를 수 있습니다. 2~3문장."
-  },
-  "bear": {
-    "rate": "...", "supply": "...", "policy": "...",
-    "expected_price_eok": "숫자(억)",
-    "narrative": "..."
-  },
+  "bull": { "rate": "...", "supply": "...", "policy": "...", "expected_price_eok": "숫자(억)", "narrative": "..." },
+  "bear": { "rate": "...", "supply": "...", "policy": "...", "expected_price_eok": "숫자(억)", "narrative": "..." },
   "actions": {
     "holder": ["3개 모니터링 포인트"],
     "buyer": ["3개 확인 포인트"],
     "seller": ["3개 점검 포인트"]
   },
   "longterm": {
-    "narrative": "20년 흐름. '참고용'임을 명시. 2~3문장.",
+    "narrative": "장기 흐름(참고용). 2~3문장.",
     "risks": ["예측이 틀릴 수 있는 대표 케이스 3개"],
     "disclaimer": "투자 판단의 단독 근거가 될 수 없습니다 등 면책 고지문"
   }
-}`;
+}
+
+factors 작성 규칙:
+- 이벤트 상위 기여 변수 + 글로벌 민감도 상위 변수를 종합해 5~8개 선정.
+- impact 화살표는 (이벤트에서의 direction × 빈도) 와 (글로벌 sensitivity 크기) 를 함께 반영.
+   · 가격을 위로 민 변수 → "↑↑" 또는 "↑"
+   · 가격을 아래로 민 변수 → "↓" 또는 "↓↓"
+- explanation 에는 가능하면 "{시점}에 {변수} 기여도 {x}% 로 가격이 {y}% 움직였습니다" 형태로 1개 시점 인용.`;
 
   const user = `[대상 아파트]
 ${aptLabel} · 현재 가격: 약 ${eokBase}억
 
-[모델 예측 (VAR-TFT)]
-- 예측 기간: ${targetMonths}개월(약 ${years}년)
+[모델 예측 (var_tft 하이브리드 · ${result.best_scenario_id || "?"})]
+- 예측 기간: ${targetMonths}개월(약 ${years}년), horizon steps=${impact.horizon}
 - 중앙값 예상가: ${eokEst}억 (현재 대비 ${result.return_pct_p50?.toFixed?.(1) ?? "?"}%)
-- 가능성 높은 범위(상): +${result.return_pct_p90?.toFixed?.(1) ?? "?"}% (낙관)
-- 가능성 높은 범위(하): ${result.return_pct_p10?.toFixed?.(1) ?? "?"}% (비관)
-- 상승/보합/하락 확률: ${formatPct(probs["상승"])} / ${formatPct(probs["보합"])} / ${formatPct(probs["하락"])}
-- 예측 신뢰도: ${risk.risk_grade || "정보 없음"} (밴드폭 ${formatPct(risk.bandwidth_pct)})
-- 방향 의도: ${result.direction_intent || "neutral"}
+- 낙관 상한 (p90): +${result.return_pct_p90?.toFixed?.(1) ?? "?"}%
+- 비관 하한 (p10): ${result.return_pct_p10?.toFixed?.(1) ?? "?"}%
+- 방향 의도: ${result.direction_intent || "neutral"} (점수 ${result.direction_score ?? 0})
 
 [사용자가 지정한 변동 조건]
 ${changedLines}
 
-[중요 발견 — factors 작성 시 반영]
-- 현 시장에서는 정부 정책(세금/대출 규제)이 가격에 가장 큰 영향을 줍니다. factors의 정책 항목 영향 강도를 가장 크게 표기하세요.
-- factors는 정확히 8개 변수로 구성: 정책 3개(주택담보대출 한도 규제, 부동산 세제, 조정대상지역 지정), 금리 2개(기준금리, 신규 주담대 금리), 수급 3개(아파트 매매 수급, 전세 수급, 매매지수).
+[XAI 입력 — 이벤트] (rule-based 트리거: 변곡점=Δ가격 부호 전환, 임계치=단일 변수 기여도 ≥30%)
+${eventText}
 
-위 데이터를 바탕으로 6-섹션 일반인용 리포트의 JSON을 생성하세요.`;
+[XAI 입력 — 글로벌 민감도] (numeric gradient β = Σ(ΔY·ΔX)/Σ(ΔX²), 스케일 보정 = |β|·σ(ΔX))
+${sensText}
+
+위 데이터를 바탕으로 6-섹션 경영진 리포트 JSON 을 생성하세요.`;
 
   return [
     { role: "system", content: system },
