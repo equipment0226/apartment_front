@@ -81,16 +81,12 @@ export interface ReportDetail {
 export interface SubwayMarker {
   name: string;
   lines: string[];
-  lat: number;
-  lng: number;
   dist_m: number | null;
   walk_min: number | null;
 }
 
 export interface SchoolMarker {
   name: string;
-  lat: number;
-  lng: number;
   dist_m: number | null;
   walk_min: number | null;
 }
@@ -98,16 +94,15 @@ export interface SchoolMarker {
 export interface CatalystMarker {
   name: string;
   kind: string;
-  lat: number;
-  lng: number;
-  approx: boolean;
+  station: string | null;
   raw: string;
 }
 
 export interface MapInfo {
   address: string;
-  lat: number | null;
-  lng: number | null;
+  region: string;
+  center_query: string;
+  complex_name: string;
   vworld_key: string;
   subways: SubwayMarker[];
   schools: SchoolMarker[];

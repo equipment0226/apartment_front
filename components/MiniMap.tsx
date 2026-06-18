@@ -1,9 +1,10 @@
 "use client";
 
 import { GraduationCap, Hammer, MapPin, TrainFront } from "lucide-react";
-import { useState } from "react";
-import { MapInfo } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { CatalystMarker, MapInfo, SchoolMarker, SubwayMarker } from "@/lib/api";
 import { lineColor, lineLabel } from "@/lib/subway";
+import { geocodeComplex, LatLng, searchPlaceCached } from "@/lib/vworld";
 
 const TILE = 256;
 
@@ -43,6 +44,74 @@ interface Pt {
   lng: number;
 }
 
+type ResolvedSubway = SubwayMarker & Pt;
+type ResolvedSchool = SchoolMarker & Pt;
+type ResolvedCatalyst = CatalystMarker & Pt & { approx: boolean };
+
+/**
+ * 백엔드는 좌표 없는 메타데이터만 내려주므로(배포 서버=해외 IP, V-World 차단),
+ * 사용자 브라우저(국내 IP)에서 JSONP 로 단지 중심 및 마커 좌표를 채운다.
+ */
+function useResolvedMap(map: MapInfo, showMarkers: boolean) {
+  const [center, setCenter] = useState<LatLng | null>(null);
+  const [subways, setSubways] = useState<ResolvedSubway[]>([]);
+  const [schools, setSchools] = useState<ResolvedSchool[]>([]);
+  const [catalysts, setCatalysts] = useState<ResolvedCatalyst[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setCenter(null);
+    setSubways([]);
+    setSchools([]);
+    setCatalysts([]);
+
+    (async () => {
+      const key = map.vworld_key;
+      const c = await geocodeComplex(key, map.center_query, map.complex_name, map.region);
+      if (cancelled) return;
+      setCenter(c);
+
+      if (showMarkers) {
+        const [sub, sch, cat] = await Promise.all([
+          Promise.all(
+            map.subways.map(async (s) => {
+              const pt = await searchPlaceCached(key, s.name);
+              return pt ? { ...s, lat: pt.lat, lng: pt.lng } : null;
+            })
+          ),
+          Promise.all(
+            map.schools.map(async (s) => {
+              const pt = await searchPlaceCached(key, s.name);
+              return pt ? { ...s, lat: pt.lat, lng: pt.lng } : null;
+            })
+          ),
+          Promise.all(
+            map.catalysts.map(async (cm) => {
+              const pt = await searchPlaceCached(key, cm.station || cm.name);
+              return pt ? { ...cm, lat: pt.lat, lng: pt.lng, approx: true } : null;
+            })
+          ),
+        ]);
+        if (cancelled) return;
+        setSubways(sub.filter(Boolean) as ResolvedSubway[]);
+        setSchools(sch.filter(Boolean) as ResolvedSchool[]);
+        setCatalysts(cat.filter(Boolean) as ResolvedCatalyst[]);
+      }
+
+      if (!cancelled) setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map.center_query, map.complex_name, map.region, map.vworld_key, showMarkers]);
+
+  return { center, subways, schools, catalysts, loading };
+}
+
 /** 단지를 중심으로, 주어진 점들이 모두 화면에 들어오는 정수 줌을 구한다. */
 function fitZoom(center: Pt, pts: Pt[], w: number, h: number, pad = 0.8, minZ = 12, maxZ = 17): number {
   if (!pts.length) return 16;
@@ -77,9 +146,20 @@ export default function MiniMap({
   showMarkers?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
-  const hasCoords = map.lat != null && map.lng != null;
+  const { center, subways, schools, catalysts, loading } = useResolvedMap(map, showMarkers);
 
-  if (!hasCoords) {
+  if (loading && !center) {
+    return (
+      <div
+        className="relative flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-deepblue/30 to-black"
+        style={{ width: "100%", aspectRatio: `${width} / ${height}` }}
+      >
+        <span className="animate-pulse text-xs font-light text-gray-500">지도 불러오는 중…</span>
+      </div>
+    );
+  }
+
+  if (!center) {
     return (
       <div
         className="relative flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-deepblue/30 to-black"
@@ -90,14 +170,12 @@ export default function MiniMap({
     );
   }
 
-  const center: Pt = { lat: map.lat!, lng: map.lng! };
-
   // 줌 산정에는 실측 좌표(역/학교/정확한 호재)만 사용. 근사(approx) 호재는 줌을 왜곡하므로 제외.
   const fitPts: Pt[] = showMarkers
     ? [
-        ...map.subways.map((s) => ({ lat: s.lat, lng: s.lng })),
-        ...map.schools.map((s) => ({ lat: s.lat, lng: s.lng })),
-        ...map.catalysts.filter((c) => !c.approx).map((c) => ({ lat: c.lat, lng: c.lng })),
+        ...subways.map((s) => ({ lat: s.lat, lng: s.lng })),
+        ...schools.map((s) => ({ lat: s.lat, lng: s.lng })),
+        ...catalysts.filter((c) => !c.approx).map((c) => ({ lat: c.lat, lng: c.lng })),
       ]
     : [];
   const zoom = fitZoom(center, fitPts, width, height);
@@ -124,7 +202,7 @@ export default function MiniMap({
     >
       {!failed ? (
         <img
-          src={vworldStaticUrl(map.vworld_key, map.lng!, map.lat!, width, height, zoom)}
+          src={vworldStaticUrl(map.vworld_key, center.lng, center.lat, width, height, zoom)}
           alt="단지 위치 지도"
           className="h-full w-full object-cover opacity-90"
           onError={() => setFailed(true)}
@@ -141,7 +219,7 @@ export default function MiniMap({
       {showMarkers && (
         <>
           {/* 개발 호재 마커 */}
-          {map.catalysts.map((c, i) => {
+          {catalysts.map((c, i) => {
             const p = posOf(c.lat, c.lng);
             return (
               <div
@@ -162,7 +240,7 @@ export default function MiniMap({
           })}
 
           {/* 초등학교 마커 */}
-          {map.schools.map((s, i) => {
+          {schools.map((s, i) => {
             const p = posOf(s.lat, s.lng);
             return (
               <div
@@ -184,7 +262,7 @@ export default function MiniMap({
           })}
 
           {/* 지하철역 마커 */}
-          {map.subways.map((s, i) => {
+          {subways.map((s, i) => {
             const p = posOf(s.lat, s.lng);
             return (
               <div
@@ -236,17 +314,17 @@ export default function MiniMap({
           <span className="flex items-center gap-1">
             <MapPin className="h-3 w-3 text-cyan-neon" /> 단지
           </span>
-          {map.subways.length > 0 && (
+          {subways.length > 0 && (
             <span className="flex items-center gap-1">
               <TrainFront className="h-3 w-3 text-white" /> 지하철
             </span>
           )}
-          {map.schools.length > 0 && (
+          {schools.length > 0 && (
             <span className="flex items-center gap-1">
               <GraduationCap className="h-3 w-3 text-emerald-300" /> 초등학교
             </span>
           )}
-          {map.catalysts.length > 0 && (
+          {catalysts.length > 0 && (
             <span className="flex items-center gap-1">
               <Hammer className="h-3 w-3 text-amber-300" /> 개발호재
             </span>

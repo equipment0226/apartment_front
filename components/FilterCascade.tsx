@@ -1,7 +1,8 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 
 export interface Selection {
@@ -27,6 +28,36 @@ export default function FilterCascade({
 }) {
   const [opts, setOpts] = useState<Record<string, string[]>>({});
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => setMounted(true), []);
+
+  // 드롭다운이 열려 있는 동안 버튼 위치 추적(스크롤/리사이즈) 및 바깥 클릭 시 닫기
+  useEffect(() => {
+    if (!openKey) return;
+    const update = () => {
+      const el = btnRefs.current[openKey];
+      if (el) setRect(el.getBoundingClientRect());
+    };
+    update();
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t)) return;
+      if (btnRefs.current[openKey]?.contains(t)) return;
+      setOpenKey(null);
+    };
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [openKey]);
 
   // 각 단계 옵션 로드
   async function load(level: keyof Selection, base: Selection) {
@@ -65,6 +96,9 @@ export default function FilterCascade({
     return !value[prev];
   }
 
+  const openLevelKey = openKey as keyof Selection | null;
+  const openList = openKey ? opts[openKey] || [] : [];
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {LEVELS.map((lv, idx) => {
@@ -75,6 +109,9 @@ export default function FilterCascade({
         return (
           <div key={lv.key} className="relative">
             <button
+              ref={(el) => {
+                btnRefs.current[lv.key] = el;
+              }}
               disabled={dis}
               onClick={() => {
                 if (dis) return;
@@ -99,25 +136,40 @@ export default function FilterCascade({
                 className={`h-4 w-4 shrink-0 transition ${isOpen ? "rotate-180 text-cyan-soft" : "text-gray-500"}`}
               />
             </button>
-
-            {isOpen && list.length > 0 && (
-              <div className="absolute z-30 mt-2 max-h-72 w-full min-w-[180px] overflow-y-auto rounded-2xl border border-white/10 bg-coal/95 p-2 shadow-glow backdrop-blur-xl">
-                {list.map((o) => (
-                  <button
-                    key={o}
-                    onClick={() => pick(lv.key, o)}
-                    className={`block w-full truncate rounded-lg px-3 py-2 text-left text-sm transition hover:bg-cyan-neon/10 ${
-                      selected === o ? "text-cyan-neon" : "text-gray-300"
-                    }`}
-                  >
-                    {o}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         );
       })}
+      {mounted &&
+        openKey &&
+        rect &&
+        openLevelKey &&
+        openList.length > 0 &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{
+              position: "fixed",
+              top: rect.bottom + 8,
+              left: rect.left,
+              width: Math.max(rect.width, 180),
+              zIndex: 9999,
+            }}
+            className="max-h-72 overflow-y-auto rounded-2xl border border-white/10 bg-coal/95 p-2 shadow-glow backdrop-blur-xl"
+          >
+            {openList.map((o) => (
+              <button
+                key={o}
+                onClick={() => pick(openLevelKey, o)}
+                className={`block w-full truncate rounded-lg px-3 py-2 text-left text-sm transition hover:bg-cyan-neon/10 ${
+                  value[openLevelKey] === o ? "text-cyan-neon" : "text-gray-300"
+                }`}
+              >
+                {o}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

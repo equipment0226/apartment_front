@@ -125,7 +125,7 @@ export default function Home() {
       </header>
 
       {/* 섹션 1: 검색 + 필터 + 평형 */}
-      <section className="space-y-5">
+      <section className="relative z-40 space-y-5">
         <div>
           <h2 className="text-2xl font-bold tracking-tighter text-white sm:text-3xl">
             10년 시세를 <span className="text-cyan-neon">시나리오</span>로 읽다
@@ -162,7 +162,7 @@ export default function Home() {
       </section>
 
       {/* 리포트 */}
-      <div ref={reportRef} className="scroll-mt-6">
+      <div ref={reportRef} className="relative z-0 scroll-mt-6">
         {loadingReport && (
           <div className="mt-10 flex flex-col items-center justify-center gap-3 py-16">
             <Loader2 className="h-8 w-8 animate-spin text-cyan-neon" />
