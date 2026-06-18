@@ -7,16 +7,25 @@ export default function AreaSelector({
   areas,
   selected,
   onSelect,
+  years,
 }: {
   areas: AreaItem[];
   selected: string | null;
   onSelect: (pyeong: string) => void;
+  years?: number;
 }) {
   if (!areas.length) return null;
   return (
     <div className="space-y-3">
-      <div className="text-[11px] font-light uppercase tracking-[0.2em] text-gray-500">
-        전용면적 선택
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-light uppercase tracking-[0.2em] text-gray-500">
+          전용면적 선택
+        </div>
+        {years ? (
+          <div className="text-[11px] font-light text-cyan-soft/70">
+            {years}년 예상 상승률 기준
+          </div>
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-2.5">
         {areas.map((a) => {
