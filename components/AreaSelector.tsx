@@ -2,17 +2,20 @@
 
 import { AreaItem } from "@/lib/api";
 import { eok, pct } from "@/lib/format";
+import { Loader2 } from "lucide-react";
 
 export default function AreaSelector({
   areas,
   selected,
   onSelect,
   years,
+  refreshing,
 }: {
   areas: AreaItem[];
   selected: string | null;
   onSelect: (pyeong: string) => void;
   years?: number;
+  refreshing?: boolean;
 }) {
   if (!areas.length) return null;
   return (
@@ -22,7 +25,10 @@ export default function AreaSelector({
           전용면적 선택
         </div>
         {years ? (
-          <div className="text-[11px] font-light text-cyan-soft/70">
+          <div className="flex items-center gap-1.5 text-[11px] font-light text-cyan-soft/70">
+            {refreshing ? (
+              <Loader2 className="h-3 w-3 animate-spin text-cyan-soft/70" />
+            ) : null}
             {years}년 예상 상승률 기준
           </div>
         ) : null}

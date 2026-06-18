@@ -21,26 +21,16 @@ export default function Home() {
   const [years, setYears] = useState(3); // 기본 분석 기간 3년
   const [report, setReport] = useState<Report | null>(null);
   const [loadingAreas, setLoadingAreas] = useState(false);
+  const [refreshingAreas, setRefreshingAreas] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  // 단지 확정 시 평형 목록 로드 (기본 분석 기간 3년 기준 상승률)
-  const lastAreaFetch = useRef<string>("");
-  const loadAreas = useCallback(async (gu: string, dong: string, complex_name: string) => {
-    setLoadingAreas(true);
+  // 단지 확정 시 상태만 리셋 (실제 평형 조회는 아래 단일 effect가 담당)
+  const loadAreas = useCallback((_gu: string, _dong: string, _complex_name: string) => {
     setAreas([]);
     setPyeong(null);
     setYears(3); // 새 단지 선택 시 기본 기간(3년)으로 리셋
     setReport(null);
-    try {
-      const res = await api.areas(gu, dong, complex_name, 3 * 12);
-      lastAreaFetch.current = `${gu}|${dong}|${complex_name}@3`; // 초기 3년치 이미 받음
-      setAreas(res);
-    } catch {
-      setAreas([]);
-    } finally {
-      setLoadingAreas(false);
-    }
   }, []);
 
   // 검색 선택
@@ -67,14 +57,18 @@ export default function Home() {
     }
   };
 
-  // 분석 기간 변경 시 평형별 상승률을 해당 구간 종점 기준으로 갱신
-  // (기간을 먼저 고르고 【해당 기간 상승률이 표시된】 평형을 선택하는 흐름)
+  // 평형 조회: 단지(구/동/단지명)와 분석 기간(years)이 바뀌면 항상 재조회한다.
+  // 평형별 상승률은 선택한 기간 종점 기준으로 계산되어 온다.
   const areaKey = `${selection.gu}|${selection.dong}|${selection.complex_name}`;
+  const prevAreaKey = useRef<string>("");
   useEffect(() => {
     if (!(selection.gu && selection.dong && selection.complex_name)) return;
-    if (areas.length === 0) return;
-    const tag = `${areaKey}@${years}`;
-    if (lastAreaFetch.current === tag) return; // 이미 해당 기간치를 보유
+    // 단지가 바뀐 첫 조회면 전체 로딩, 기간만 바뀌면 카드 갱신 표시
+    const isNewComplex = prevAreaKey.current !== areaKey;
+    prevAreaKey.current = areaKey;
+    if (isNewComplex) setLoadingAreas(true);
+    else setRefreshingAreas(true);
+
     let cancelled = false;
     const t = setTimeout(() => {
       (async () => {
@@ -85,12 +79,14 @@ export default function Home() {
             selection.complex_name!,
             years * 12
           );
-          if (!cancelled) {
-            lastAreaFetch.current = tag;
-            setAreas(res);
-          }
+          if (!cancelled) setAreas(res);
         } catch {
-          /* 이전 값 유지 */
+          if (!cancelled && isNewComplex) setAreas([]);
+        } finally {
+          if (!cancelled) {
+            setLoadingAreas(false);
+            setRefreshingAreas(false);
+          }
         }
       })();
     }, 200);
@@ -99,7 +95,7 @@ export default function Home() {
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [years, areaKey, areas.length]);
+  }, [areaKey, years]);
 
   // 준공년도 → 신축 단지 분석 상한(+Y년). 준공후 경과 연수까지만 허용.
   const approvalYear = areas.length ? parseApprovalYear(areas[0].approval_year) : null;
@@ -205,7 +201,13 @@ export default function Home() {
         {/* 2) 선택한 기간의 상승률이 반영된 평형 카드 */}
         {areas.length > 0 && (
           <div className="glass-soft p-5">
-            <AreaSelector areas={areas} selected={pyeong} onSelect={setPyeong} years={years} />
+            <AreaSelector
+              areas={areas}
+              selected={pyeong}
+              onSelect={setPyeong}
+              years={years}
+              refreshing={refreshingAreas}
+            />
           </div>
         )}
       </section>
