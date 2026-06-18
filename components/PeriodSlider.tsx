@@ -1,15 +1,25 @@
 "use client";
 
-import { CalendarRange, Info } from "lucide-react";
+import { CalendarRange, Info, Lock } from "lucide-react";
 
 export default function PeriodSlider({
   years,
   onChange,
+  maxYears = 10,
 }: {
   years: number;
   onChange: (y: number) => void;
+  maxYears?: number;
 }) {
-  const pct = ((years - 1) / (10 - 1)) * 100;
+  // 신축 단지 등으로 분석 상한이 10년 미만일 수 있다.
+  const cap = Math.min(10, Math.max(1, Math.round(maxYears)));
+  const limited = cap < 10;
+  const clamped = Math.min(years, cap);
+  const pct = cap > 1 ? ((clamped - 1) / (cap - 1)) * 100 : 0;
+
+  const ticks = [1, 3, 5, 7, 10].filter((m) => m <= cap);
+  if (!ticks.includes(cap)) ticks.push(cap);
+  ticks.sort((a, b) => a - b);
 
   return (
     <div className="glass-soft p-5">
@@ -18,7 +28,7 @@ export default function PeriodSlider({
         <span className="text-sm font-medium text-white">몇 년을 분석하시겠어요?</span>
       </div>
       <p className="mt-1 text-xs font-light text-gray-500">
-        선택한 기간을 기준으로 시세 예측·군집·영향 요인이 모두 다시 계산됩니다. (최대 10년)
+        선택한 기간을 기준으로 시세 예측·군집·영향 요인이 모두 다시 계산됩니다. (최대 {cap}년)
       </p>
 
       <div className="mt-5 flex items-center gap-4">
@@ -33,9 +43,9 @@ export default function PeriodSlider({
               type="range"
               className="vsn-range"
               min={1}
-              max={10}
+              max={cap}
               step={1}
-              value={years}
+              value={clamped}
               onChange={(e) => onChange(Number(e.target.value))}
               style={{ pointerEvents: "auto" }}
             />
@@ -43,11 +53,11 @@ export default function PeriodSlider({
 
           {/* 눈금 — 슬라이더 트랙과 동일한 폭 위에서 정렬 */}
           <div className="mt-2 flex justify-between text-[10px] font-light text-gray-600">
-            {[1, 3, 5, 7, 10].map((m) => (
+            {ticks.map((m) => (
               <button
                 key={m}
                 onClick={() => onChange(m)}
-                className={`transition hover:text-cyan-soft ${years === m ? "text-cyan-neon" : ""}`}
+                className={`transition hover:text-cyan-soft ${clamped === m ? "text-cyan-neon" : ""}`}
               >
                 {m}년
               </button>
@@ -56,13 +66,23 @@ export default function PeriodSlider({
         </div>
 
         <div className="w-16 shrink-0 text-right">
-          <span className="num text-2xl text-cyan-neon">{years}</span>
+          <span className="num text-2xl text-cyan-neon">{clamped}</span>
           <span className="ml-1 text-sm font-light text-gray-500">년</span>
         </div>
       </div>
 
+      {/* 신축 단지: 준공 후 경과 연수까지만 분석 허용 */}
+      {limited && (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-cyan-soft/15 bg-cyan-soft/[0.04] px-3 py-2.5">
+          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-soft/80" strokeWidth={1.6} />
+          <span className="text-[11px] font-light leading-relaxed text-cyan-soft/80">
+            준공 후 거래 이력이 {cap}년뿐이라, 신뢰할 수 있는 최대 분석 기간을 {cap}년으로 제한했습니다.
+          </span>
+        </div>
+      )}
+
       {/* 신축 정확도 주의 멘트 */}
-      {years > 3 && (
+      {!limited && clamped > 3 && (
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] px-3 py-2.5">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300/80" strokeWidth={1.6} />
           <span className="text-[11px] font-light leading-relaxed text-amber-200/70">

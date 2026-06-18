@@ -14,6 +14,8 @@ export interface AreaItem {
   p50_final_eok: number | null;
   ret_p50_pct: number | null;
   n_scenarios: number;
+  approval_year?: string | number | null;
+  max_months?: number;
 }
 
 export interface FilterResponse {
@@ -145,8 +147,13 @@ async function get<T>(path: string, params?: Record<string, string>): Promise<T>
 export const api = {
   search: (q: string) => get<SearchItem[]>("/search", { q }),
   filters: (params: Record<string, string>) => get<FilterResponse>("/filters", params),
-  areas: (gu: string, dong: string, complex_name: string) =>
-    get<AreaItem[]>("/areas", { gu, dong, complex_name }),
+  areas: (gu: string, dong: string, complex_name: string, months?: number) =>
+    get<AreaItem[]>("/areas", {
+      gu,
+      dong,
+      complex_name,
+      ...(months ? { months: String(months) } : {}),
+    }),
   report: (gu: string, dong: string, complex_name: string, pyeong: string, months: number) =>
     get<Report>("/report", { gu, dong, complex_name, pyeong, months: String(months) }),
   aiInsight: async (body: {

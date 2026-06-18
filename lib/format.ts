@@ -47,3 +47,12 @@ export function firstStation(raw: string | null): string | null {
   const m = list[0].match(/^([^()]+)/);
   return m ? m[1].trim() : list[0];
 }
+
+/** 준공년도 값(예: "2020", "2020년", "2020.05") → 연도 정수. 없으면 null */
+export function parseApprovalYear(v: string | number | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  const m = String(v).match(/(\d{4})/);
+  if (!m) return null;
+  const y = parseInt(m[1], 10);
+  return y >= 1900 && y <= 2100 ? y : null;
+}
