@@ -25,6 +25,7 @@ export default function Home() {
   const reportRef = useRef<HTMLDivElement>(null);
 
   // 단지 확정 시 평형 목록 로드 (기본 분석 기간 3년 기준 상승률)
+  const lastAreaFetch = useRef<string>("");
   const loadAreas = useCallback(async (gu: string, dong: string, complex_name: string) => {
     setLoadingAreas(true);
     setAreas([]);
@@ -33,6 +34,7 @@ export default function Home() {
     setReport(null);
     try {
       const res = await api.areas(gu, dong, complex_name, 3 * 12);
+      lastAreaFetch.current = `${gu}|${dong}|${complex_name}@3`; // 초기 3년치 이미 받음
       setAreas(res);
     } catch {
       setAreas([]);
@@ -68,15 +70,11 @@ export default function Home() {
   // 분석 기간 변경 시 평형별 상승률을 해당 구간 종점 기준으로 갱신
   // (기간을 먼저 고르고 【해당 기간 상승률이 표시된】 평형을 선택하는 흐름)
   const areaKey = `${selection.gu}|${selection.dong}|${selection.complex_name}`;
-  const didInitAreaYears = useRef<string | null>(null);
   useEffect(() => {
     if (!(selection.gu && selection.dong && selection.complex_name)) return;
     if (areas.length === 0) return;
-    // 단지가 막 로드된 직후(years=3 기본) 중복 호출 방지
-    if (didInitAreaYears.current !== areaKey) {
-      didInitAreaYears.current = areaKey;
-      if (years === 3) return;
-    }
+    const tag = `${areaKey}@${years}`;
+    if (lastAreaFetch.current === tag) return; // 이미 해당 기간치를 보유
     let cancelled = false;
     const t = setTimeout(() => {
       (async () => {
@@ -87,18 +85,21 @@ export default function Home() {
             selection.complex_name!,
             years * 12
           );
-          if (!cancelled) setAreas(res);
+          if (!cancelled) {
+            lastAreaFetch.current = tag;
+            setAreas(res);
+          }
         } catch {
           /* 이전 값 유지 */
         }
       })();
-    }, 250);
+    }, 200);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [years, areaKey]);
+  }, [years, areaKey, areas.length]);
 
   // 준공년도 → 신축 단지 분석 상한(+Y년). 준공후 경과 연수까지만 허용.
   const approvalYear = areas.length ? parseApprovalYear(areas[0].approval_year) : null;
