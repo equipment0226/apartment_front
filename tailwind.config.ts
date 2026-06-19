@@ -13,11 +13,19 @@ const config: Config = {
         ink: "#000000",
         coal: "#09090b",
         slateglass: "rgba(9, 9, 11, 0.55)",
-        platinum: "#E2E8F0",
+        platinum: "#F1F5FB",
         deepblue: "#1E3A8A",
         cyan: {
-          neon: "#00E5FF",
-          soft: "#38BDF8",
+          neon: "#22EEFF",
+          soft: "#5CCBFF",
+        },
+        // 검은 배경 대비를 높인 더 밝고 선명한 그레이 스케일(텍스트 전용)
+        gray: {
+          300: "#EEF2F8",
+          400: "#CAD5E4",
+          500: "#A2AFC2",
+          600: "#828FA4",
+          700: "#626E81",
         },
       },
       fontFamily: {

@@ -76,13 +76,16 @@ export default function GuXai({
       {/* 점예측 — BVAR-X */}
       <div>
         <div className="flex items-center justify-between">
-          <div className="text-[11px] font-light uppercase tracking-[0.2em] text-gray-500">
+          <div className="text-[11px] font-light uppercase tracking-[0.2em] text-gray-400">
             점예측 영향 요인 · BVAR-X
           </div>
-          <span className="rounded-full border border-amber-300/30 bg-amber-300/[0.08] px-2.5 py-0.5 text-[10px] font-light text-amber-200">
+          <span className="rounded-full border border-amber-300/40 bg-amber-300/[0.12] px-2.5 py-0.5 text-[10px] font-medium text-amber-100">
             잔차상관 기여도
           </span>
         </div>
+        <p className="mt-1.5 text-xs font-light leading-relaxed text-gray-300">
+          BVAR-X · 점 예측 경로를 만드는 데 영향을 준 주요 항목이에요.
+        </p>
         {shapPoint.length ? (
           <>
             <div className="mt-3">
@@ -102,13 +105,16 @@ export default function GuXai({
       {/* 밴드예측 — TFT */}
       <div>
         <div className="flex items-center justify-between">
-          <div className="text-[11px] font-light uppercase tracking-[0.2em] text-gray-500">
+          <div className="text-[11px] font-light uppercase tracking-[0.2em] text-gray-400">
             밴드예측 영향 요인 · TFT
           </div>
-          <span className="rounded-full border border-cyan-neon/30 bg-cyan-neon/[0.08] px-2.5 py-0.5 text-[10px] font-light text-cyan-soft">
+          <span className="rounded-full border border-cyan-neon/40 bg-cyan-neon/[0.12] px-2.5 py-0.5 text-[10px] font-medium text-cyan-soft">
             변수선택망(VSN)
           </span>
         </div>
+        <p className="mt-1.5 text-xs font-light leading-relaxed text-gray-300">
+          TFT · Band(밴드) 경로를 만드는 데 영향을 준 항목이에요.
+        </p>
         {shapBand.length ? (
           <>
             <div className="mt-3">
