@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api, GuItem, GuReport } from "@/lib/api";
 import { shortDate } from "@/lib/format";
-import PeriodSlider from "@/components/PeriodSlider";
 import GuFanChart, { GuFanRow } from "@/components/GuFanChart";
 import GuClusterTabs from "@/components/GuClusterTabs";
 import GuAiInsight from "@/components/GuAiInsight";
@@ -59,7 +58,6 @@ function buildRows(
 export default function DistrictPage() {
   const [gus, setGus] = useState<GuItem[]>([]);
   const [gu, setGu] = useState<string | null>(null);
-  const [years, setYears] = useState(3);
   const [report, setReport] = useState<GuReport | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -79,28 +77,25 @@ export default function DistrictPage() {
     };
   }, []);
 
-  // 구 + 기간 → 리포트 (디바운스)
+  // 구 선택 → 리포트 (예측 기간은 1년 고정)
   useEffect(() => {
     if (!gu) return;
     let cancelled = false;
-    const t = setTimeout(() => {
-      setLoading(true);
-      (async () => {
-        try {
-          const res = await api.guReport(gu, years * 12);
-          if (!cancelled) setReport(res);
-        } catch {
-          if (!cancelled) setReport(null);
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      })();
-    }, 250);
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await api.guReport(gu, 12);
+        if (!cancelled) setReport(res);
+      } catch {
+        if (!cancelled) setReport(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
     return () => {
       cancelled = true;
-      clearTimeout(t);
     };
-  }, [gu, years]);
+  }, [gu]);
 
   const tftRows = useMemo(
     () => (report ? buildRows(report.history, report.tft, report.point) : []),
@@ -143,7 +138,7 @@ export default function DistrictPage() {
             우리 구 <span className="text-cyan-neon">전망 분석</span> · 지수 기반
           </h2>
           <p className="mt-2 text-sm font-light text-gray-400">
-            서울 25개 구의 아파트 매매가격지수를 향후 최대 10년까지 시나리오로 예측합니다.
+            서울 25개 구의 아파트 매매가격지수를 향후 1년을 예측합니다.
           </p>
         </div>
 
@@ -173,9 +168,6 @@ export default function DistrictPage() {
             )}
           </div>
         </div>
-
-        {/* 분석 기간 슬라이더 */}
-        {gu && <PeriodSlider years={years} onChange={setYears} maxYears={10} />}
       </section>
 
       {/* 리포트 */}
@@ -284,9 +276,9 @@ export default function DistrictPage() {
                   <Layers className="h-4 w-4 text-cyan-neon" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-white">설명가능성(XAI) 요인 분석</h3>
+                  <h3 className="text-lg font-semibold text-white">주요 영향도 분석</h3>
                   <p className="text-[11px] font-light text-gray-500">
-                    실제 모델 기여도(final_gu_shap) 기반 · 점예측=BVAR-X · 밴드예측=TFT
+                    실제 모델 기여도 기반
                   </p>
                 </div>
               </div>

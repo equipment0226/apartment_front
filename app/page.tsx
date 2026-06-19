@@ -37,7 +37,7 @@ export default function Landing() {
             <span className="text-cyan-neon">확률 분포형</span> 부동산 예측
           </h1>
           <p className="mt-4 max-w-xl text-sm font-light leading-relaxed text-gray-400">
-            수백~수천 개의 생성 시나리오로 서울 부동산의 향후 10년 흐름을 확률 분포로
+            수백~수천 개의 생성 시나리오로 서울 부동산의 향후 1년 흐름을 확률 분포로
             예측합니다. 분석 단위를 선택해 시작하세요.
           </p>
         </div>
@@ -57,8 +57,7 @@ export default function Landing() {
               Index · 지수 기반
             </p>
             <p className="mt-3 text-sm font-light leading-relaxed text-gray-400">
-              서울 25개 구의 아파트 매매가격지수를 BVAR-X 점예측과 TFT 시나리오 밴드로
-              전망합니다.
+              서울 25개 구의 아파트 매매가격지수를 전망합니다.
             </p>
             <div className="mt-5 flex items-center gap-1.5 text-sm font-medium text-cyan-neon">
               분석 시작 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
@@ -78,8 +77,7 @@ export default function Landing() {
               Price · 시세 기반
             </p>
             <p className="mt-3 text-sm font-light leading-relaxed text-gray-400">
-              개별 단지·평형의 실거래 시세를 CatBoost·부트스트랩 시나리오로 향후 10년
-              예측합니다.
+              개별 단지·평형의 실거래 시세를 전망합니다.
             </p>
             <div className="mt-5 flex items-center gap-1.5 text-sm font-medium text-platinum">
               분석 시작 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />

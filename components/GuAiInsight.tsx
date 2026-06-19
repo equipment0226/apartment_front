@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { GuTopFeature } from "@/lib/api";
 import { api } from "@/lib/api";
@@ -31,7 +31,6 @@ export default function GuAiInsight({
 }) {
   const merged = useMemo(() => mergeFeatures(shapPoint, shapBand), [shapPoint, shapBand]);
   const top5 = merged.slice(0, 5);
-  const top10 = merged.slice(0, 10);
 
   const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -103,51 +102,6 @@ export default function GuAiInsight({
             ))}
           </div>
         )}
-      </div>
-
-      {/* 상세 요인 (최대 10개) */}
-      <div className="mt-6">
-        <div className="text-[11px] font-light uppercase tracking-[0.2em] text-gray-500">
-          상세 영향 요인
-        </div>
-        <div className="mt-3 space-y-2">
-          {top10.map((f) => {
-            const Icon = iconFor(f.icon);
-            const up = f.direction === "up";
-            return (
-              <div
-                key={f.feature}
-                className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
-                  <Icon className="h-4 w-4 text-cyan-soft" strokeWidth={1.6} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white">{f.name}</span>
-                    {up ? (
-                      <ArrowUpRight className="h-3.5 w-3.5 text-cyan-neon" />
-                    ) : (
-                      <ArrowDownRight className="h-3.5 w-3.5 text-indigo-300" />
-                    )}
-                  </div>
-                  <div className="truncate text-xs font-light text-gray-500">{f.desc}</div>
-                </div>
-                <div className="w-24 shrink-0">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-cyan-soft to-cyan-neon"
-                      style={{ width: `${Math.min(100, f.impact_pct)}%` }}
-                    />
-                  </div>
-                  <div className="mt-1 text-right text-[10px] font-light text-gray-500">
-                    {f.impact_pct.toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
