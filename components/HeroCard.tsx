@@ -6,10 +6,17 @@ import { eok, firstStation, pct } from "@/lib/format";
 import MiniMap from "./MiniMap";
 
 export default function HeroCard({ report }: { report: Report }) {
-  const { listing, detail, map } = report;
+  const { listing, detail, map, fan } = report;
   const up = (listing.ret_p50_pct ?? 0) >= 0;
   const station = firstStation(detail.subways);
   const isChopuma = detail.static?.["초품아여부"] === "초품아";
+
+  // 1년 후 예측 종점(밴드): P10–P90 범위 + P50 중앙값
+  const finalPt = fan.forecast.length ? fan.forecast[fan.forecast.length - 1] : null;
+  const p10 = finalPt?.p10 ?? null;
+  const p50 = finalPt?.p50 ?? listing.p50_final_eok;
+  const p90 = finalPt?.p90 ?? null;
+  const hasBand = p10 != null && p90 != null;
 
   const badges = [
     detail.approval_year && {
@@ -54,15 +61,37 @@ export default function HeroCard({ report }: { report: Report }) {
 
         {/* 하단: 가격 + 미니맵 */}
         <div className="mt-8 flex items-end justify-between gap-4">
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="text-[11px] font-light uppercase tracking-[0.2em] text-gray-500">
               현재 시세
             </div>
             <div className="mt-1 flex items-end gap-3">
               <span className="num text-4xl sm:text-5xl">{eok(listing.current_price_eok)}</span>
-              <span className={`mb-1 text-sm font-medium ${up ? "text-cyan-soft" : "text-rose-400"}`}>
-                {listing.years}년 {pct(listing.ret_p50_pct)}
-              </span>
+            </div>
+
+            {/* 1년 후 예측 밴드 (P10–P90) + P50·상승률 */}
+            <div className="mt-5 max-w-md rounded-2xl border border-cyan-neon/20 bg-cyan-neon/[0.05] p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-light uppercase tracking-[0.2em] text-cyan-soft">
+                  1년 후 예측 · P10–P90
+                </span>
+                <span className={`text-xs font-medium ${up ? "text-cyan-soft" : "text-rose-400"}`}>
+                  {pct(listing.ret_p50_pct)}
+                </span>
+              </div>
+              {hasBand ? (
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="num text-2xl text-white sm:text-3xl">{eok(p10)}</span>
+                  <span className="text-sm font-light text-gray-500">~</span>
+                  <span className="num text-2xl text-white sm:text-3xl">{eok(p90)}</span>
+                </div>
+              ) : (
+                <div className="mt-2 num text-2xl text-white sm:text-3xl">{eok(p50)}</div>
+              )}
+              <div className="mt-1.5 text-xs font-light text-gray-400">
+                예측 중앙값(P50){" "}
+                <span className="num font-medium text-cyan-soft">{eok(p50)}</span>
+              </div>
             </div>
 
             {/* 배지 */}
