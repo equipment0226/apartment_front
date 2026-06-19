@@ -125,7 +125,7 @@ export interface Report {
 export interface GuItem {
   si: string;
   gu: string;
-  ret_neutral_pct: number | null;
+  ret_bvarx_pct: number | null;
 }
 
 export interface IndexPoint {

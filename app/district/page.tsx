@@ -149,7 +149,7 @@ export default function DistrictPage() {
           <div className="flex flex-wrap gap-2">
             {gus.map((g) => {
               const selected = gu === g.gu;
-              const r = g.ret_neutral_pct;
+              const r = g.ret_bvarx_pct;
               const up = r != null && r >= 0;
               const retClass = selected
                 ? "text-cyan-neon/80"
@@ -181,9 +181,6 @@ export default function DistrictPage() {
                 <Loader2 className="h-4 w-4 animate-spin text-cyan-soft" /> 구 목록을 불러오는 중…
               </div>
             )}
-          </div>
-          <div className="mt-2.5 text-[10px] font-light text-gray-500">
-            구 옆 수치 = 중립 시나리오 기준 향후 1년 예상 상승률
           </div>
         </div>
       </section>
