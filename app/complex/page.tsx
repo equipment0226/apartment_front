@@ -10,7 +10,6 @@ import FilterCascade, { Selection } from "@/components/FilterCascade";
 import AreaSelector from "@/components/AreaSelector";
 import PeriodSlider from "@/components/PeriodSlider";
 import HeroCard from "@/components/HeroCard";
-import ClusterTabs from "@/components/ClusterTabs";
 import AiInsight from "@/components/AiInsight";
 import ChartsSection from "@/components/ChartsSection";
 import ComplexInfo from "@/components/ComplexInfo";
@@ -230,12 +229,7 @@ export default function ComplexPage() {
             {/* 섹션 1: Hero */}
             <HeroCard report={report} />
 
-            {/* 섹션 2: 군집 + AI */}
-            <ClusterTabs
-              cluster={report.cluster}
-              years={report.listing.years}
-              nScenarios={report.listing.n_scenarios}
-            />
+            {/* 섹션 2: AI */}
             <AiInsight report={report} />
 
             {/* 섹션 3 & 4: 차트 + 슬라이더 */}

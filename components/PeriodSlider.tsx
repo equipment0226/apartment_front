@@ -28,7 +28,7 @@ export default function PeriodSlider({
         <span className="text-sm font-medium text-white">몇 년을 분석하시겠어요?</span>
       </div>
       <p className="mt-1 text-xs font-light text-gray-500">
-        선택한 기간을 기준으로 시세 예측·군집·영향 요인이 모두 다시 계산됩니다. (최대 {cap}년)
+        선택한 기간을 기준으로 시세 예측·영향 요인이 모두 다시 계산됩니다. (최대 {cap}년)
       </p>
 
       <div className="mt-5 flex items-center gap-4">

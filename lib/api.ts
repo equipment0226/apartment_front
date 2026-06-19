@@ -31,21 +31,6 @@ export interface FanPoint {
   p90?: number;
 }
 
-export interface ClusterBucket {
-  prob: number;
-  count: number;
-  price_low: number | null;
-  price_high: number | null;
-  price_mid: number | null;
-  ret_pct: number | null;
-}
-
-export interface Cluster {
-  bull: ClusterBucket;
-  neutral: ClusterBucket;
-  bear: ClusterBucket;
-}
-
 export interface TopFeature {
   feature: string;
   name: string;
@@ -131,7 +116,6 @@ export interface ReportListing {
 export interface Report {
   listing: ReportListing;
   fan: { history: FanPoint[]; forecast: FanPoint[]; anchor: FanPoint | null };
-  cluster: Cluster | null;
   shap: Shap;
   detail: ReportDetail;
   map: MapInfo;
@@ -169,21 +153,6 @@ export interface GuTopFeature {
   direction: "up" | "down";
 }
 
-export interface GuClusterBucket {
-  prob: number;
-  count: number;
-  index_low: number | null;
-  index_high: number | null;
-  index_mid: number | null;
-  ret_pct: number | null;
-}
-
-export interface GuCluster {
-  bull: GuClusterBucket;
-  neutral: GuClusterBucket;
-  bear: GuClusterBucket;
-}
-
 export interface GuReport {
   gu: string;
   si: string;
@@ -198,8 +167,6 @@ export interface GuReport {
   point: IndexPoint[];
   tft: { forecast: BandPoint[]; anchor: { ts: string | null; value: number | null } };
   rw: { forecast: BandPoint[]; anchor: { ts: string | null; value: number | null } };
-  cluster: GuCluster | null;
-  cluster_meta: { step: number; months: number; ts: string | null; n_scenarios: number } | null;
   shap_point: GuTopFeature[];
   shap_band: GuTopFeature[];
 }
