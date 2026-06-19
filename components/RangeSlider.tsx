@@ -7,16 +7,21 @@ export default function RangeSlider({
   max,
   value,
   onChange,
+  title = "예측 구간",
+  formatValue,
 }: {
   min: number;
   max: number;
   value: [number, number];
   onChange: (v: [number, number]) => void;
+  title?: string;
+  formatValue?: (v: number) => string;
 }) {
   const [start, end] = value;
   const span = max - min || 1;
   const leftPct = ((start - min) / span) * 100;
   const rightPct = ((end - min) / span) * 100;
+  const fmt = formatValue ?? ((v: number) => String(v));
 
   const setStart = useCallback(
     (v: number) => onChange([Math.min(v, end - 1), end]),
@@ -30,12 +35,11 @@ export default function RangeSlider({
   return (
     <div className="select-none">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-light text-gray-500">예측 구간</span>
+        <span className="font-light text-gray-500">{title}</span>
         <span className="num text-sm text-cyan-neon">
-          {start}
+          {fmt(start)}
           <span className="font-light text-gray-500"> ~ </span>
-          {end}
-          <span className="ml-1 text-xs font-light text-gray-500">개월</span>
+          {fmt(end)}
         </span>
       </div>
 

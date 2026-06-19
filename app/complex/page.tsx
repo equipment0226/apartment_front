@@ -4,11 +4,9 @@ import { ArrowLeft, Building2, Loader2, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, AreaItem, Report, SearchItem } from "@/lib/api";
-import { parseApprovalYear } from "@/lib/format";
 import SearchBar from "@/components/SearchBar";
 import FilterCascade, { Selection } from "@/components/FilterCascade";
 import AreaSelector from "@/components/AreaSelector";
-import PeriodSlider from "@/components/PeriodSlider";
 import HeroCard from "@/components/HeroCard";
 import AiInsight from "@/components/AiInsight";
 import ChartsSection from "@/components/ChartsSection";
@@ -18,7 +16,7 @@ export default function ComplexPage() {
   const [selection, setSelection] = useState<Selection>({});
   const [areas, setAreas] = useState<AreaItem[]>([]);
   const [pyeong, setPyeong] = useState<string | null>(null);
-  const [years, setYears] = useState(3); // 기본 분석 기간 3년
+  const years = 1; // 예측 기간은 1년 고정
   const [report, setReport] = useState<Report | null>(null);
   const [loadingAreas, setLoadingAreas] = useState(false);
   const [refreshingAreas, setRefreshingAreas] = useState(false);
@@ -29,7 +27,6 @@ export default function ComplexPage() {
   const loadAreas = useCallback((_gu: string, _dong: string, _complex_name: string) => {
     setAreas([]);
     setPyeong(null);
-    setYears(3); // 새 단지 선택 시 기본 기간(3년)으로 리셋
     setReport(null);
   }, []);
 
@@ -96,17 +93,6 @@ export default function ComplexPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [areaKey, years]);
-
-  // 준공년도 → 신축 단지 분석 상한(+Y년). 준공후 경과 연수까지만 허용.
-  const approvalYear = areas.length ? parseApprovalYear(areas[0].approval_year) : null;
-  const maxYears = approvalYear
-    ? Math.min(10, Math.max(1, new Date().getFullYear() - approvalYear))
-    : 10;
-
-  // 선택 기간이 상한을 초과하면 자동으로 줄인다.
-  useEffect(() => {
-    if (years > maxYears) setYears(maxYears);
-  }, [maxYears, years]);
 
   // 평형 선택 + 기간 → 리포트 로드 (기간 변경 시 디바운스)
   useEffect(() => {
@@ -177,7 +163,7 @@ export default function ComplexPage() {
             우리 단지 <span className="text-cyan-neon">전망 분석</span> · 시세 기반
           </h2>
           <p className="mt-2 text-sm font-light text-gray-400">
-            서울 아파트의 향후 120개월 가격을 수백 개의 시나리오로 예측합니다.
+            서울 아파트의 향후 12개월 가격을 수백 개의 시나리오로 예측합니다.
           </p>
         </div>
 
@@ -196,12 +182,7 @@ export default function ComplexPage() {
           </div>
         )}
 
-        {/* 1) 분석 기간을 먼저 선택 */}
-        {areas.length > 0 && (
-          <PeriodSlider years={years} onChange={setYears} maxYears={maxYears} />
-        )}
-
-        {/* 2) 선택한 기간의 상승률이 반영된 평형 카드 */}
+        {/* 단지 선택 후 전용면적(평형) 선택 */}
         {areas.length > 0 && (
           <div className="glass-soft p-5">
             <AreaSelector
@@ -229,11 +210,11 @@ export default function ComplexPage() {
             {/* 섹션 1: Hero */}
             <HeroCard report={report} />
 
-            {/* 섹션 2: AI */}
-            <AiInsight report={report} />
-
-            {/* 섹션 3 & 4: 차트 + 슬라이더 */}
+            {/* 섹션 2: 시세 예측 팬 차트 + 슬라이더 */}
             <ChartsSection report={report} />
+
+            {/* 섹션 3: AI 해설 */}
+            <AiInsight report={report} />
 
             {/* 단지 정보 */}
             <ComplexInfo report={report} />

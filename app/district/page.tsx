@@ -8,6 +8,11 @@ import { shortDate } from "@/lib/format";
 import GuFanChart, { GuFanRow } from "@/components/GuFanChart";
 import GuAiInsight from "@/components/GuAiInsight";
 import GuXai from "@/components/GuXai";
+import RangeSlider from "@/components/RangeSlider";
+
+// 기본 표시 구간 (yyyy-mm) — 2020-01 ~ 2026-05
+const DEFAULT_START = "2020-01";
+const DEFAULT_END = "2026-05";
 
 interface BandLike {
   forecast: { ts: string; p1: number; p10: number; p50: number; p90: number; p99: number }[];
@@ -104,6 +109,25 @@ export default function DistrictPage() {
     () => (report ? buildRows(report.history, report.rw) : []),
     [report]
   );
+
+  // 전체 plot 구간(과거+예측)에 적용되는 표시 슬라이더
+  const total = tftRows.length;
+  const defaultRange = useMemo<[number, number]>(() => {
+    if (!total) return [1, 1];
+    const startIdx = Math.max(
+      0,
+      tftRows.findIndex((r) => r.ts.slice(0, 7) >= DEFAULT_START)
+    );
+    const after = tftRows.findIndex((r) => r.ts.slice(0, 7) > DEFAULT_END);
+    const endIdx = after === -1 ? total - 1 : Math.max(startIdx, after - 1);
+    return [startIdx + 1, endIdx + 1];
+  }, [tftRows, total]);
+
+  const [range, setRange] = useState<[number, number]>([1, 1]);
+  useEffect(() => setRange(defaultRange), [defaultRange]);
+
+  const tftView = useMemo(() => tftRows.slice(range[0] - 1, range[1]), [tftRows, range]);
+  const rwView = useMemo(() => rwRows.slice(range[0] - 1, range[1]), [rwRows, range]);
 
   const si = gus[0]?.si || "서울특별시";
 
@@ -267,8 +291,23 @@ export default function DistrictPage() {
                 </div>
               </div>
               <div className="mt-4">
-                <GuFanChart data={tftRows} colorHue="cyan" showPoint />
+                <GuFanChart data={tftView} colorHue="cyan" showPoint />
               </div>
+            </div>
+
+            {/* 글로벌 레인지 슬라이더 — 전체 plot 구간(과거+예측) X축 조정 */}
+            <div className="glass animate-pulseglow p-6 sm:p-7">
+              <RangeSlider
+                min={1}
+                max={total}
+                value={range}
+                onChange={setRange}
+                title="표시 구간"
+                formatValue={(v) => tftRows[v - 1]?.label ?? String(v)}
+              />
+              <p className="mt-3 text-[11px] font-light text-gray-500">
+                슬라이더를 움직이면 과거 실측부터 예측까지 전체 구간을 자유롭게 조정할 수 있습니다.
+              </p>
             </div>
 
             {/* AI 해설 (Deepseek) — 차트 하단 / 상관도 순위분석 사이 */}
@@ -325,7 +364,7 @@ export default function DistrictPage() {
                 </div>
               </div>
               <div className="mt-4">
-                <GuFanChart data={rwRows} colorHue="rose" showPoint={false} />
+                <GuFanChart data={rwView} colorHue="rose" showPoint={false} />
               </div>
             </div>
           </div>
