@@ -10,9 +10,9 @@ import GuAiInsight from "@/components/GuAiInsight";
 import GuXai from "@/components/GuXai";
 import RangeSlider from "@/components/RangeSlider";
 
-// 기본 표시 구간 (yyyy-mm) — 2020-01 ~ 2026-05
+// 기본 표시 구간 (yyyy-mm) — 2020-01 ~ 2027-05
 const DEFAULT_START = "2020-01";
-const DEFAULT_END = "2026-05";
+const DEFAULT_END = "2027-05";
 
 interface BandLike {
   forecast: { ts: string; p1: number; p10: number; p50: number; p90: number; p99: number }[];

@@ -7,9 +7,9 @@ import { shortDate } from "@/lib/format";
 import FanChart, { FanRow } from "./FanChart";
 import RangeSlider from "./RangeSlider";
 
-// 기본 표시 구간 (yyyy-mm) — 2020-01 ~ 2026-05
+// 기본 표시 구간 (yyyy-mm) — 2020-01 ~ 2027-05
 const DEFAULT_START = "2020-01";
-const DEFAULT_END = "2026-05";
+const DEFAULT_END = "2027-05";
 
 export default function ChartsSection({ report }: { report: Report }) {
   const { fan } = report;
