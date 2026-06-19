@@ -137,6 +137,55 @@ export interface Report {
   map: MapInfo;
 }
 
+// ---- 구(區) 단위 전망 분석 (지수 기반) ----
+export interface GuItem {
+  si: string;
+  gu: string;
+}
+
+export interface IndexPoint {
+  ts: string;
+  value: number;
+}
+
+export interface BandPoint {
+  ts: string;
+  p1: number;
+  p10: number;
+  p50: number;
+  p90: number;
+  p99: number;
+}
+
+export interface GuTopFeature {
+  feature: string;
+  name: string;
+  desc: string;
+  group: string;
+  icon: string;
+  impact: number;
+  impact_pct: number;
+  direction: "up" | "down";
+}
+
+export interface GuReport {
+  gu: string;
+  si: string;
+  months: number;
+  years: number;
+  last_date: string | null;
+  last_index: number | null;
+  point_end: number | null;
+  ret_point_pct: number | null;
+  tft_band_end: { p10: number; p90: number } | null;
+  history: IndexPoint[];
+  point: IndexPoint[];
+  tft: { forecast: BandPoint[]; anchor: { ts: string | null; value: number | null } };
+  rw: { forecast: BandPoint[]; anchor: { ts: string | null; value: number | null } };
+  shap_point: GuTopFeature[];
+  shap_band: GuTopFeature[];
+}
+
 async function get<T>(path: string, params?: Record<string, string>): Promise<T> {
   const qs = params ? "?" + new URLSearchParams(params).toString() : "";
   const res = await fetch(`/api${path}${qs}`, { cache: "no-store" });
@@ -156,6 +205,9 @@ export const api = {
     }),
   report: (gu: string, dong: string, complex_name: string, pyeong: string, months: number) =>
     get<Report>("/report", { gu, dong, complex_name, pyeong, months: String(months) }),
+  guList: () => get<GuItem[]>("/gu/list"),
+  guReport: (gu: string, months: number) =>
+    get<GuReport>("/gu/report", { gu, months: String(months) }),
   aiInsight: async (body: {
     gu: string;
     dong: string;
