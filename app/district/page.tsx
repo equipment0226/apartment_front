@@ -7,6 +7,8 @@ import { api, GuItem, GuReport } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import PeriodSlider from "@/components/PeriodSlider";
 import GuFanChart, { GuFanRow } from "@/components/GuFanChart";
+import GuClusterTabs from "@/components/GuClusterTabs";
+import GuAiInsight from "@/components/GuAiInsight";
 import GuXai from "@/components/GuXai";
 
 interface BandLike {
@@ -235,6 +237,12 @@ export default function DistrictPage() {
               </div>
             </div>
 
+            {/* K-Means(3) 시나리오 군집 — 1년 후 지수 낙관/중립/비관 */}
+            <GuClusterTabs
+              cluster={report.cluster}
+              nScenarios={report.cluster_meta?.n_scenarios ?? 0}
+            />
+
             {/* 차트 ① — TFT 시나리오 밴드 + BVAR-X 점예측 */}
             <div className="glass p-6 sm:p-7">
               <div className="flex items-center justify-between">
@@ -261,6 +269,13 @@ export default function DistrictPage() {
                 <GuFanChart data={tftRows} colorHue="cyan" showPoint />
               </div>
             </div>
+
+            {/* AI 해설 (Deepseek) — 차트 하단 / 상관도 순위분석 사이 */}
+            <GuAiInsight
+              gu={report.gu}
+              shapPoint={report.shap_point}
+              shapBand={report.shap_band}
+            />
 
             {/* XAI 설명 — 실제 SHAP 테이블 기반 */}
             <div className="glass p-6 sm:p-7">

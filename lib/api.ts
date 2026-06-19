@@ -168,6 +168,21 @@ export interface GuTopFeature {
   direction: "up" | "down";
 }
 
+export interface GuClusterBucket {
+  prob: number;
+  count: number;
+  index_low: number | null;
+  index_high: number | null;
+  index_mid: number | null;
+  ret_pct: number | null;
+}
+
+export interface GuCluster {
+  bull: GuClusterBucket;
+  neutral: GuClusterBucket;
+  bear: GuClusterBucket;
+}
+
 export interface GuReport {
   gu: string;
   si: string;
@@ -182,6 +197,8 @@ export interface GuReport {
   point: IndexPoint[];
   tft: { forecast: BandPoint[]; anchor: { ts: string | null; value: number | null } };
   rw: { forecast: BandPoint[]; anchor: { ts: string | null; value: number | null } };
+  cluster: GuCluster | null;
+  cluster_meta: { step: number; months: number; ts: string | null; n_scenarios: number } | null;
   shap_point: GuTopFeature[];
   shap_band: GuTopFeature[];
 }
@@ -221,6 +238,15 @@ export const api = {
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error("ai-insight failed");
+    return (await res.json()) as { insight: string };
+  },
+  guInsight: async (body: { gu: string }) => {
+    const res = await fetch("/api/gu/insight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error("gu-insight failed");
     return (await res.json()) as { insight: string };
   },
 };
