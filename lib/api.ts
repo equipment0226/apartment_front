@@ -141,6 +141,7 @@ export interface Report {
 export interface GuItem {
   si: string;
   gu: string;
+  ret_neutral_pct: number | null;
 }
 
 export interface IndexPoint {

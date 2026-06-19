@@ -138,7 +138,7 @@ export default function DistrictPage() {
             우리 구 <span className="text-cyan-neon">전망 분석</span> · 지수 기반
           </h2>
           <p className="mt-2 text-sm font-light text-gray-400">
-            서울 25개 구의 아파트 매매가격지수를 향후 1년을 예측합니다.
+            서울 25개 구의 아파트 매매가격 지수(1년)을 예측합니다.
           </p>
         </div>
 
@@ -148,24 +148,43 @@ export default function DistrictPage() {
             지역 선택 · {si}
           </div>
           <div className="flex flex-wrap gap-2">
-            {gus.map((g) => (
-              <button
-                key={g.gu}
-                onClick={() => setGu(g.gu)}
-                className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
-                  gu === g.gu
-                    ? "border-cyan-neon/60 bg-cyan-neon/[0.1] text-cyan-neon shadow-glow"
-                    : "border-white/10 text-gray-400 hover:border-cyan-neon/30 hover:text-cyan-soft"
-                }`}
-              >
-                {g.gu}
-              </button>
-            ))}
+            {gus.map((g) => {
+              const selected = gu === g.gu;
+              const r = g.ret_neutral_pct;
+              const up = r != null && r >= 0;
+              const retClass = selected
+                ? "text-cyan-neon/80"
+                : up
+                ? "text-emerald-400/80"
+                : "text-rose-400/80";
+              return (
+                <button
+                  key={g.gu}
+                  onClick={() => setGu(g.gu)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+                    selected
+                      ? "border-cyan-neon/60 bg-cyan-neon/[0.1] text-cyan-neon shadow-glow"
+                      : "border-white/10 text-gray-400 hover:border-cyan-neon/30 hover:text-cyan-soft"
+                  }`}
+                >
+                  {g.gu}
+                  {r != null && (
+                    <span className={`text-[10px] font-light tabular-nums ${retClass}`}>
+                      {up ? "+" : ""}
+                      {r.toFixed(1)}%
+                    </span>
+                  )}
+                </button>
+              );
+            })}
             {!gus.length && (
               <div className="flex items-center gap-2 text-sm font-light text-gray-500">
                 <Loader2 className="h-4 w-4 animate-spin text-cyan-soft" /> 구 목록을 불러오는 중…
               </div>
             )}
+          </div>
+          <div className="mt-2.5 text-[10px] font-light text-gray-500">
+            구 옆 수치 = 중립 시나리오 기준 향후 1년 예상 상승률
           </div>
         </div>
       </section>
