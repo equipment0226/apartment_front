@@ -33,7 +33,7 @@ function FanTooltip({ active, payload, label }: any) {
       )}
       {row.point != null && (
         <>
-          <div className="text-amber-300">点예측값 <span className="num">{row.point.toFixed(1)}억</span></div>
+          <div className="text-cyan-neon">점예측값 <span className="num">{row.point.toFixed(1)}억</span></div>
           {row.p10 != null && row.p90 != null && (
             <div className="font-light text-gray-400">
               {row.p10.toFixed(1)}억 ~ {row.p90.toFixed(1)}억 (P10–P90)
@@ -98,7 +98,7 @@ export default function FanChart({ data }: { data: FanRow[] }) {
         <Line
           type="monotone"
           dataKey="point"
-          stroke="#FBBF24"
+          stroke="#00E5FF"
           strokeWidth={2.2}
           dot={false}
           isAnimationActive={false}
