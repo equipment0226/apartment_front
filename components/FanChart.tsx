@@ -18,6 +18,7 @@ export interface FanRow {
   p10?: number | null;
   p50?: number | null;
   p90?: number | null;
+  point?: number | null;
   band?: [number, number] | null;
   isForecast: boolean;
 }
@@ -30,6 +31,9 @@ function FanTooltip({ active, payload, label }: any) {
       <div className="mb-1 font-medium text-gray-300">{label}</div>
       {row.hist != null && (
         <div className="text-white">실거래 <span className="num">{row.hist.toFixed(1)}억</span></div>
+      )}
+      {row.point != null && (
+        <div className="text-amber-300">점예측 <span className="num">{row.point.toFixed(1)}억</span></div>
       )}
       {row.p50 != null && (
         <>
@@ -99,6 +103,16 @@ export default function FanChart({ data }: { data: FanRow[] }) {
           stroke="#00E5FF"
           strokeWidth={2.2}
           strokeDasharray="5 4"
+          dot={false}
+          isAnimationActive={false}
+          connectNulls
+        />
+        {/* 순수 TFT 점예측(밴드 중심선) */}
+        <Line
+          type="monotone"
+          dataKey="point"
+          stroke="#FBBF24"
+          strokeWidth={2.2}
           dot={false}
           isAnimationActive={false}
           connectNulls

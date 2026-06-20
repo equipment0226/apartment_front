@@ -30,6 +30,7 @@ export default function ChartsSection({ report }: { report: Report }) {
         last.p50 = v;
         last.p10 = v;
         last.p90 = v;
+        last.point = v;
         last.band = [v, v];
       }
     }
@@ -39,6 +40,7 @@ export default function ChartsSection({ report }: { report: Report }) {
       p10: f.p10 ?? null,
       p50: f.p50 ?? null,
       p90: f.p90 ?? null,
+      point: f.point ?? null,
       band: f.p10 != null && f.p90 != null ? ([f.p10, f.p90] as [number, number]) : null,
       isForecast: true,
     }));

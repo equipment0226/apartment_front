@@ -29,6 +29,7 @@ export interface FanPoint {
   p10?: number;
   p50?: number;
   p90?: number;
+  point?: number | null;
 }
 
 export interface TopFeature {
