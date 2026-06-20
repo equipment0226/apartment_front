@@ -27,7 +27,6 @@ export default function ChartsSection({ report }: { report: Report }) {
       const last = hist[hist.length - 1];
       const v = last.hist ?? null;
       if (v != null) {
-        last.p50 = v;
         last.p10 = v;
         last.p90 = v;
         last.point = v;
@@ -38,7 +37,6 @@ export default function ChartsSection({ report }: { report: Report }) {
       ts: f.ts,
       label: shortDate(f.ts),
       p10: f.p10 ?? null,
-      p50: f.p50 ?? null,
       p90: f.p90 ?? null,
       point: f.point ?? null,
       band: f.p10 != null && f.p90 != null ? ([f.p10, f.p90] as [number, number]) : null,

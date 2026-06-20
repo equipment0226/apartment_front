@@ -16,7 +16,6 @@ export interface FanRow {
   label: string;
   hist?: number | null;
   p10?: number | null;
-  p50?: number | null;
   p90?: number | null;
   point?: number | null;
   band?: [number, number] | null;
@@ -33,14 +32,13 @@ function FanTooltip({ active, payload, label }: any) {
         <div className="text-white">실거래 <span className="num">{row.hist.toFixed(1)}억</span></div>
       )}
       {row.point != null && (
-        <div className="text-amber-300">점예측 <span className="num">{row.point.toFixed(1)}억</span></div>
-      )}
-      {row.p50 != null && (
         <>
-          <div className="text-cyan-neon">예측 중앙 <span className="num">{row.p50.toFixed(1)}억</span></div>
-          <div className="font-light text-gray-400">
-            {row.p10?.toFixed(1)}억 ~ {row.p90?.toFixed(1)}억 (P10–P90)
-          </div>
+          <div className="text-amber-300">点예측값 <span className="num">{row.point.toFixed(1)}억</span></div>
+          {row.p10 != null && row.p90 != null && (
+            <div className="font-light text-gray-400">
+              {row.p10.toFixed(1)}억 ~ {row.p90.toFixed(1)}억 (P10–P90)
+            </div>
+          )}
         </>
       )}
     </div>
@@ -96,18 +94,7 @@ export default function FanChart({ data }: { data: FanRow[] }) {
           isAnimationActive={false}
           connectNulls
         />
-        {/* 예측 중앙값 */}
-        <Line
-          type="monotone"
-          dataKey="p50"
-          stroke="#00E5FF"
-          strokeWidth={2.2}
-          strokeDasharray="5 4"
-          dot={false}
-          isAnimationActive={false}
-          connectNulls
-        />
-        {/* 순수 TFT 점예측(밴드 중심선) */}
+        {/* TFT 점예측값 */}
         <Line
           type="monotone"
           dataKey="point"

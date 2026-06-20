@@ -6,14 +6,14 @@ import { eok, firstStation, pct } from "@/lib/format";
 
 export default function HeroCard({ report }: { report: Report }) {
   const { listing, detail, fan } = report;
-  const up = (listing.ret_p50_pct ?? 0) >= 0;
+  const up = (listing.ret_point_pct ?? 0) >= 0;
   const station = firstStation(detail.subways);
   const isChopuma = detail.static?.["초품아여부"] === "초품아";
 
-  // 1년 후 예측 종점(밴드): P10–P90 범위 + P50 중앙값
+  // 1년 후 예측 종점(밴드): P10–P90 범위 + 점예측값
   const finalPt = fan.forecast.length ? fan.forecast[fan.forecast.length - 1] : null;
   const p10 = finalPt?.p10 ?? null;
-  const p50 = finalPt?.p50 ?? listing.p50_final_eok;
+  const point = finalPt?.point ?? listing.point_final_eok;
   const p90 = finalPt?.p90 ?? null;
   const hasBand = p10 != null && p90 != null;
 
@@ -78,7 +78,7 @@ export default function HeroCard({ report }: { report: Report }) {
                   1년 후 예측 · P10–P90
                 </span>
                 <span className={`text-xs font-medium ${up ? "text-cyan-soft" : "text-rose-400"}`}>
-                  {pct(listing.ret_p50_pct)}
+                  {pct(listing.ret_point_pct)}
                 </span>
               </div>
               <div className="mt-2 flex items-end justify-between gap-3">
@@ -89,11 +89,11 @@ export default function HeroCard({ report }: { report: Report }) {
                     <span className="num text-2xl text-white sm:text-3xl">{eok(p90)}</span>
                   </div>
                 ) : (
-                  <div className="num text-2xl text-white sm:text-3xl">{eok(p50)}</div>
+                  <div className="num text-2xl text-white sm:text-3xl">{eok(point)}</div>
                 )}
                 <div className="text-right text-xs font-light text-gray-400">
-                  중앙값(P50)
-                  <div className="num text-sm font-medium text-cyan-soft">{eok(p50)}</div>
+                  점예측값
+                  <div className="num text-sm font-medium text-cyan-soft">{eok(point)}</div>
                 </div>
               </div>
             </div>

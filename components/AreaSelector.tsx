@@ -36,7 +36,7 @@ export default function AreaSelector({
       <div className="flex flex-wrap gap-2.5">
         {areas.map((a) => {
           const active = selected === a.pyeong;
-          const up = (a.ret_p50_pct ?? 0) >= 0;
+          const up = (a.ret_point_pct ?? 0) >= 0;
           return (
             <button
               key={a.pyeong}
@@ -54,7 +54,7 @@ export default function AreaSelector({
               <div className="mt-0.5 flex items-center gap-1.5 text-xs">
                 <span className="label">{eok(a.current_price_eok)}</span>
                 <span className={up ? "text-cyan-soft" : "text-rose-400"}>
-                  {pct(a.ret_p50_pct)}
+                  {pct(a.ret_point_pct)}
                 </span>
               </div>
             </button>

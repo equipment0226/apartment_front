@@ -11,8 +11,8 @@ export interface SearchItem {
 export interface AreaItem {
   pyeong: string;
   current_price_eok: number | null;
-  p50_final_eok: number | null;
-  ret_p50_pct: number | null;
+  point_final_eok: number | null;
+  ret_point_pct: number | null;
   n_scenarios: number;
   approval_year?: string | number | null;
   max_months?: number;
@@ -110,8 +110,8 @@ export interface ReportListing {
   months: number;
   years: number;
   n_scenarios: number;
-  p50_final_eok: number | null;
-  ret_p50_pct: number | null;
+  point_final_eok: number | null;
+  ret_point_pct: number | null;
 }
 
 export interface Report {
